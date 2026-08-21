@@ -30,6 +30,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   late bool _useLe;
   String? _backgroundPath;
   bool _backgroundBusy = false;
+  late final Stream<List<PlaySession>> _sessionsStream;
 
   final _backgroundCache = BackgroundCacheService();
   final _bangumiSearch = BangumiImageSearchService();
@@ -42,6 +43,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _profileCtrl = TextEditingController(text: widget.game.leProfile);
     _useLe = widget.game.useLocaleEmulator;
     _backgroundPath = widget.game.backgroundPath;
+    _sessionsStream = ref
+        .read(sessionRepoProvider)
+        .watchForGame(widget.game.id);
   }
 
   @override
@@ -265,10 +269,6 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final sessionsStream = ref
-        .watch(sessionRepoProvider)
-        .watchForGame(widget.game.id);
-
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
@@ -392,7 +392,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                     border: Border.all(color: AppColors.border),
                   ),
                   child: StreamBuilder<List<PlaySession>>(
-                    stream: sessionsStream,
+                    stream: _sessionsStream,
                     builder: (context, snapshot) {
                       final list = mergeSessions(snapshot.data ?? const []);
                       if (list.isEmpty) {

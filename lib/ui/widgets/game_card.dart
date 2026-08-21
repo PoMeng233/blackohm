@@ -4,15 +4,16 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../features/tracking/tracking_engine.dart';
+import '../../providers.dart';
 import '../theme.dart';
 
-class GameCard extends StatefulWidget {
+class GameCard extends ConsumerStatefulWidget {
   const GameCard({
     required this.game,
-    required this.activeState,
     required this.onLaunch,
     required this.onOpenDirectory,
     required this.onOpenDetail,
@@ -22,7 +23,6 @@ class GameCard extends StatefulWidget {
   });
 
   final Game game;
-  final TrackingPublicState activeState;
   final VoidCallback onLaunch;
   final VoidCallback onOpenDirectory;
   final VoidCallback onOpenDetail;
@@ -30,18 +30,23 @@ class GameCard extends StatefulWidget {
   final VoidCallback onToggleFavorite;
 
   @override
-  State<GameCard> createState() => _GameCardState();
+  ConsumerState<GameCard> createState() => _GameCardState();
 }
 
-class _GameCardState extends State<GameCard> {
+class _GameCardState extends ConsumerState<GameCard> {
   bool _hovering = false;
-
-  bool get _isActive =>
-      widget.activeState.isActive &&
-      widget.activeState.gameId == widget.game.id;
 
   @override
   Widget build(BuildContext context) {
+    final activeState = ref.watch(
+      trackingStateProvider.select((value) {
+        final state = value.valueOrNull;
+        return state != null && state.gameId == widget.game.id
+            ? state
+            : TrackingPublicState.idle;
+      }),
+    );
+    final isActive = activeState.isActive;
     final backgroundPath = widget.game.backgroundPath;
     final backgroundFile = backgroundPath == null || backgroundPath.isEmpty
         ? null
@@ -62,14 +67,14 @@ class _GameCardState extends State<GameCard> {
                 color: _hovering ? AppColors.surfaceHover : AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: _isActive
+                  color: isActive
                       ? context.interactiveColor
                       : (widget.game.favorite
                             ? const Color(0xFFFFC857)
                             : (_hovering
                                   ? AppColors.border
                                   : Colors.transparent)),
-                  width: _isActive || widget.game.favorite ? 1.5 : 1,
+                  width: isActive || widget.game.favorite ? 1.5 : 1,
                 ),
                 boxShadow: widget.game.favorite
                     ? [
@@ -154,7 +159,7 @@ class _GameCardState extends State<GameCard> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            if (_isActive) ...[
+                            if (isActive) ...[
                               Container(
                                 width: 7,
                                 height: 7,
@@ -165,7 +170,7 @@ class _GameCardState extends State<GameCard> {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                formatStopwatch(widget.activeState.elapsedMs),
+                                formatStopwatch(activeState.elapsedMs),
                                 style: TextStyle(
                                   color: context.interactiveColor,
                                   fontSize: 11,

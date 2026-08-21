@@ -139,9 +139,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gameListProvider);
-    final activeState =
-        ref.watch(trackingStateProvider).value ??
-        ref.watch(trackingEngineProvider).current;
+    final activeGameId = ref.watch(
+      trackingStateProvider.select((value) => value.valueOrNull?.gameId ?? 0),
+    );
     final launcher = LaunchService();
 
     return Column(
@@ -350,7 +350,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     return RepaintBoundary(
                       child: GameCard(
                         game: g,
-                        activeState: activeState,
                         onLaunch: () => _launchGame(g, launcher),
                         onOpenDirectory: () => _openGameDirectory(g, launcher),
                         onOpenDetail: () => showDialog<void>(
@@ -380,8 +379,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (context, i) {
                   final g = filtered[i];
-                  final isCardActive =
-                      activeState.isActive && activeState.gameId == g.id;
+                  final isCardActive = activeGameId == g.id;
                   return Material(
                     color: isCardActive
                         ? AppColors.surfaceActive
@@ -462,10 +460,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                formatStopwatch(activeState.elapsedMs),
+                                '正在游玩',
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 12,
                                 ),
                               ),
                             ] else

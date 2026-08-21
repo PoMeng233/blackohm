@@ -26,6 +26,9 @@ class InsightsPage extends ConsumerStatefulWidget {
 class _InsightsPageState extends ConsumerState<InsightsPage> {
   InsightsRange _range = InsightsRange.month;
   InsightsChart _chart = InsightsChart.heatmap;
+  Stream<List<PlaySession>>? _sessionsStream;
+  DateTime? _sessionsStart;
+  DateTime? _sessionsEnd;
 
   ({DateTime start, DateTime end}) _bounds() {
     final now = DateTime.now();
@@ -46,16 +49,26 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
     };
   }
 
+  Stream<List<PlaySession>> _sessionsFor(
+    ({DateTime start, DateTime end}) bounds,
+  ) {
+    if (_sessionsStream == null ||
+        _sessionsStart != bounds.start ||
+        _sessionsEnd != bounds.end) {
+      _sessionsStart = bounds.start;
+      _sessionsEnd = bounds.end;
+      _sessionsStream = ref
+          .read(sessionRepoProvider)
+          .watchInRange(bounds.start, bounds.end);
+    }
+    return _sessionsStream!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bounds = _bounds();
     final games = ref.watch(gameListProvider).value ?? const <Game>[];
-    final active =
-        ref.watch(trackingStateProvider).value ??
-        ref.watch(trackingEngineProvider).current;
-    final sessions = ref
-        .read(sessionRepoProvider)
-        .watchInRange(bounds.start, bounds.end);
+    final sessions = _sessionsFor(bounds);
 
     return StreamBuilder<List<PlaySession>>(
       stream: sessions,
@@ -86,7 +99,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                   ),
                 ),
                 const Spacer(),
-                _ActivePill(active: active, game: model.gameFor(active.gameId)),
+                _InsightsActivePill(games: games),
               ],
             ),
             const SizedBox(height: 6),
@@ -715,6 +728,26 @@ class _SessionRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _InsightsActivePill extends ConsumerWidget {
+  const _InsightsActivePill({required this.games});
+  final List<Game> games;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active =
+        ref.watch(trackingStateProvider).valueOrNull ??
+        ref.read(trackingEngineProvider).current;
+    Game? game;
+    for (final item in games) {
+      if (item.id == active.gameId) {
+        game = item;
+        break;
+      }
+    }
+    return _ActivePill(active: active, game: game);
   }
 }
 

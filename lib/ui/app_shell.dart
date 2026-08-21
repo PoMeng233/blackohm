@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/database/app_database.dart';
 import '../features/launcher/launch_service.dart';
 import '../features/scanner/ingestion_service.dart';
 import '../features/tray/tray_service.dart';
@@ -28,6 +29,8 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   int _navIndex = 0;
   TrayService? _tray;
+  ProviderSubscription<AsyncValue<List<Game>>>? _recentGamesSubscription;
+  ProviderSubscription<AppSettingsState>? _settingsSubscription;
 
   @override
   void initState() {
@@ -65,19 +68,21 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     await tray.start(paused: paused);
 
     // 监听最近游玩列表变化更新托盘菜单
-    ref.listenManual(recentGamesProvider, (_, next) {
-      final list = next.value ?? const [];
+    _recentGamesSubscription = ref.listenManual(recentGamesProvider, (_, next) {
+      final list = next.value ?? const <Game>[];
       tray.updateRecent(list.map((g) => (id: g.id, title: g.title)).toList());
     }, fireImmediately: true);
 
     // 监听暂停开关更新托盘复选框
-    ref.listenManual(settingsProvider, (_, next) {
+    _settingsSubscription = ref.listenManual(settingsProvider, (_, next) {
       tray.updatePaused(next.trackingPaused);
     });
   }
 
   @override
   void dispose() {
+    _recentGamesSubscription?.close();
+    _settingsSubscription?.close();
     windowManager.removeListener(this);
     _tray?.dispose();
     super.dispose();
