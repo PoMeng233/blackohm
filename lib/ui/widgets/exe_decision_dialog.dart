@@ -1,6 +1,7 @@
 /// 启动程序决策弹窗：多候选 exe 时展示图标、体积、描述并交由用户手动点选。
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,7 +17,7 @@ class ExeDecisionDialog extends StatelessWidget {
   });
 
   final List<EnrichedCandidate> candidates;
-  final ValueChanged<EnrichedCandidate> onSelected;
+  final FutureOr<void> Function(EnrichedCandidate) onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -71,9 +72,9 @@ class ExeDecisionDialog extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: () {
+                        onTap: () async {
                           Navigator.of(context).pop();
-                          onSelected(c);
+                          await onSelected(c);
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(12),
@@ -86,6 +87,8 @@ class ExeDecisionDialog extends StatelessWidget {
                                         c.icon!,
                                         width: 40,
                                         height: 40,
+                                        cacheWidth: 80,
+                                        cacheHeight: 80,
                                       ),
                                     )
                                   : Container(

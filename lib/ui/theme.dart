@@ -3,6 +3,22 @@ library;
 
 import 'package:flutter/material.dart';
 
+enum ThemePalette { obsidian, ocean, amethyst, amber }
+
+Color paletteSeed(ThemePalette palette) => switch (palette) {
+  ThemePalette.obsidian => const Color(0xFF00E5A3),
+  ThemePalette.ocean => const Color(0xFF60A5FA),
+  ThemePalette.amethyst => const Color(0xFFC084FC),
+  ThemePalette.amber => const Color(0xFFF59E0B),
+};
+
+String paletteLabel(ThemePalette palette) => switch (palette) {
+  ThemePalette.obsidian => '黑曜青绿',
+  ThemePalette.ocean => '深海蓝',
+  ThemePalette.amethyst => '紫晶',
+  ThemePalette.amber => '琥珀',
+};
+
 abstract final class AppColors {
   static const bgDark = Color(0xFF0D0F12);
   static const surface = Color(0xFF16191E);
@@ -24,13 +40,16 @@ abstract final class AppColors {
   static const error = Color(0xFFFF5252);
 }
 
-ThemeData buildDarkTheme() {
+ThemeData buildDarkTheme({ThemePalette palette = ThemePalette.obsidian}) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: paletteSeed(palette),
+    brightness: Brightness.dark,
+  );
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
     scaffoldBackgroundColor: AppColors.bgDark,
-    colorScheme: const ColorScheme.dark(
-      primary: AppColors.accent,
+    colorScheme: scheme.copyWith(
       surface: AppColors.surface,
       error: AppColors.error,
     ),

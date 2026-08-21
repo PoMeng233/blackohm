@@ -13,6 +13,8 @@ import '../theme.dart';
 
 enum InsightsRange { month, quarter, year }
 
+enum InsightsChart { heatmap, bars }
+
 class InsightsPage extends ConsumerStatefulWidget {
   const InsightsPage({super.key});
 
@@ -22,6 +24,7 @@ class InsightsPage extends ConsumerStatefulWidget {
 
 class _InsightsPageState extends ConsumerState<InsightsPage> {
   InsightsRange _range = InsightsRange.month;
+  InsightsChart _chart = InsightsChart.heatmap;
 
   ({DateTime start, DateTime end}) _bounds() {
     final now = DateTime.now();
@@ -163,15 +166,40 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                 );
               },
             ),
+            const SizedBox(height: 12),
+            SegmentedButton<InsightsChart>(
+              segments: const [
+                ButtonSegment(
+                  value: InsightsChart.heatmap,
+                  icon: Icon(Icons.grid_on_rounded),
+                  label: Text('热图'),
+                ),
+                ButtonSegment(
+                  value: InsightsChart.bars,
+                  icon: Icon(Icons.bar_chart_rounded),
+                  label: Text('条状图'),
+                ),
+              ],
+              selected: {_chart},
+              onSelectionChanged: (value) =>
+                  setState(() => _chart = value.first),
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            ),
             const SizedBox(height: 18),
             _SectionCard(
-              title: '前台游玩热图',
-              subtitle: '${_rangeLabel(_range)} · 每格代表一个自然日',
-              child: _ActivityHeatmap(
-                start: bounds.start,
-                end: bounds.end,
-                daily: model.daily,
-              ),
+              title: _chart == InsightsChart.heatmap ? '前台游玩热图' : '每日游玩时长',
+              subtitle: '${_rangeLabel(_range)} · 每格/每柱代表一个自然日',
+              child: _chart == InsightsChart.heatmap
+                  ? _ActivityHeatmap(
+                      start: bounds.start,
+                      end: bounds.end,
+                      daily: model.daily,
+                    )
+                  : _DailyBarChart(
+                      start: bounds.start,
+                      end: bounds.end,
+                      daily: model.daily,
+                    ),
             ),
             const SizedBox(height: 18),
             LayoutBuilder(
@@ -395,6 +423,78 @@ Color _heatColor(int seconds, int maxSeconds) {
 String _dateLabel(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+class _DailyBarChart extends StatelessWidget {
+  const _DailyBarChart({
+    required this.start,
+    required this.end,
+    required this.daily,
+  });
+  final DateTime start;
+  final DateTime end;
+  final Map<DateTime, int> daily;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = end.difference(start).inDays;
+    final maxSeconds = daily.values.fold<int>(0, math.max);
+    return SizedBox(
+      height: 190,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: List.generate(days, (index) {
+            final date = start.add(Duration(days: index));
+            final key = DateTime(date.year, date.month, date.day);
+            final seconds = daily[key] ?? 0;
+            final ratio = maxSeconds == 0 ? 0.0 : seconds / maxSeconds;
+            return Tooltip(
+              message: '${_dateLabel(date)}\\n${formatPlayDuration(seconds)}',
+              child: Container(
+                width: 22,
+                margin: const EdgeInsets.only(right: 5),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (seconds > 0)
+                      Text(
+                        formatPlayDuration(seconds),
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 9,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: math.max(4.0, ratio * 125),
+                      decoration: BoxDecoration(
+                        color: _heatColor(seconds, maxSeconds),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      '${date.month}/${date.day}',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
 class _TopGames extends StatelessWidget {
   const _TopGames({required this.games});
   final List<_RangeGame> games;
@@ -445,7 +545,13 @@ class _RankRow extends StatelessWidget {
         if (game.game.iconPng != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: Image.memory(game.game.iconPng!, width: 26, height: 26),
+            child: Image.memory(
+              game.game.iconPng!,
+              width: 26,
+              height: 26,
+              cacheWidth: 52,
+              cacheHeight: 52,
+            ),
           )
         else
           const Icon(
@@ -542,7 +648,13 @@ class _SessionRow extends StatelessWidget {
         if (game?.iconPng != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: Image.memory(game!.iconPng!, width: 26, height: 26),
+            child: Image.memory(
+              game!.iconPng!,
+              width: 26,
+              height: 26,
+              cacheWidth: 52,
+              cacheHeight: 52,
+            ),
           )
         else
           const Icon(

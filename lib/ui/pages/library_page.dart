@@ -2,17 +2,22 @@
 library;
 
 import 'package:drift/drift.dart' show Value;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../features/launcher/launch_service.dart';
+import '../../features/scanner/ingestion_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
+import '../widgets/exe_decision_dialog.dart';
 import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 
 enum LibraryViewMode { grid, list }
+
+enum LibrarySort { recent, title, totalTime, createdAt, favorite }
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -24,8 +29,10 @@ class LibraryPage extends ConsumerStatefulWidget {
 class _LibraryPageState extends ConsumerState<LibraryPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   LibraryViewMode _viewMode = LibraryViewMode.grid;
+  LibrarySort _sort = LibrarySort.recent;
   bool _onlyFavorites = false;
   String _searchQuery = '';
+  bool _adding = false;
 
   @override
   void initState() {
@@ -56,6 +63,76 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('游戏目录不存在或无法打开')));
+    }
+  }
+
+  Future<void> _addGame() async {
+    if (_adding) return;
+    final source = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('添加游戏'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'directory'),
+            child: const ListTile(
+              leading: Icon(Icons.folder_open_rounded),
+              title: Text('扫描游戏目录'),
+              subtitle: Text('递归查找 exe 并过滤安装器'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'file'),
+            child: const ListTile(
+              leading: Icon(Icons.play_circle_outline_rounded),
+              title: Text('选择运行文件'),
+              subtitle: Text('直接选择一个 .exe 入库'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !mounted) return;
+    String? path;
+    if (source == 'directory') {
+      path = await FilePicker.getDirectoryPath(dialogTitle: '选择游戏目录');
+    } else {
+      final result = await FilePicker.pickFiles(
+        dialogTitle: '选择游戏运行文件',
+        type: FileType.custom,
+        allowedExtensions: ['exe'],
+      );
+      path = result?.files.single.path;
+    }
+    if (path == null || !mounted) return;
+    setState(() => _adding = true);
+    try {
+      final service = IngestionService(ref.read(gameRepoProvider));
+      final report = await service.ingestDroppedPaths([path]);
+      if (!mounted) return;
+      for (final candidates in report.pendingDecisions) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => ExeDecisionDialog(
+            candidates: candidates,
+            onSelected: (candidate) => service.addChosen(candidate, report),
+          ),
+        );
+      }
+      if (!mounted) return;
+      final message = report.added.isNotEmpty
+          ? '已添加 ${report.added.length} 款游戏'
+          : report.pendingDecisions.isNotEmpty
+          ? '请选择主运行文件'
+          : report.duplicatePaths.isNotEmpty
+          ? '该游戏已经在库中'
+          : '未找到有效的游戏运行文件';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _adding = false);
     }
   }
 
@@ -97,6 +174,39 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 ),
               ),
               const SizedBox(width: 12),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<LibrarySort>(
+                  value: _sort,
+                  borderRadius: BorderRadius.circular(12),
+                  dropdownColor: AppColors.surfaceActive,
+                  onChanged: (value) {
+                    if (value != null) setState(() => _sort = value);
+                  },
+                  items: const [
+                    DropdownMenuItem(
+                      value: LibrarySort.recent,
+                      child: Text('最近游玩'),
+                    ),
+                    DropdownMenuItem(
+                      value: LibrarySort.title,
+                      child: Text('名称 A-Z'),
+                    ),
+                    DropdownMenuItem(
+                      value: LibrarySort.totalTime,
+                      child: Text('累计时长'),
+                    ),
+                    DropdownMenuItem(
+                      value: LibrarySort.createdAt,
+                      child: Text('添加时间'),
+                    ),
+                    DropdownMenuItem(
+                      value: LibrarySort.favorite,
+                      child: Text('收藏优先'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 tooltip: _onlyFavorites ? '显示全部' : '仅看收藏',
                 icon: Icon(
@@ -109,6 +219,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     setState(() => _onlyFavorites = !_onlyFavorites),
               ),
               const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: _adding ? null : _addGame,
+                icon: _adding
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_rounded, size: 17),
+                label: const Text('添加游戏'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.bgDark,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 8),
               SegmentedButton<LibraryViewMode>(
                 segments: const [
                   ButtonSegment(
@@ -145,12 +272,31 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     g.exePath.contains(_searchQuery);
               }).toList();
 
-              // 收藏置顶
               filtered.sort((a, b) {
-                if (a.favorite != b.favorite) {
-                  return a.favorite ? -1 : 1;
+                switch (_sort) {
+                  case LibrarySort.title:
+                    return a.title.toLowerCase().compareTo(
+                      b.title.toLowerCase(),
+                    );
+                  case LibrarySort.totalTime:
+                    return b.totalPlaySeconds.compareTo(a.totalPlaySeconds);
+                  case LibrarySort.createdAt:
+                    return b.createdAt.compareTo(a.createdAt);
+                  case LibrarySort.favorite:
+                    if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
+                    return a.title.compareTo(b.title);
+                  case LibrarySort.recent:
+                    final aTime =
+                        a.lastPlayedAt ??
+                        DateTime.fromMillisecondsSinceEpoch(0);
+                    final bTime =
+                        b.lastPlayedAt ??
+                        DateTime.fromMillisecondsSinceEpoch(0);
+                    final result = bTime.compareTo(aTime);
+                    if (result != 0) return result;
+                    if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
+                    return a.title.compareTo(b.title);
                 }
-                return a.title.compareTo(b.title);
               });
 
               if (filtered.isEmpty) {
@@ -173,6 +319,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           fontSize: 14,
                         ),
                       ),
+                      if (_searchQuery.isEmpty) ...[
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _adding ? null : _addGame,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('添加游戏'),
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -232,7 +386,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     color: isCardActive
                         ? AppColors.surfaceActive
                         : AppColors.surface,
-                    borderRadius: BorderRadius.circular(8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: g.favorite
+                            ? const Color(0xFFFFC857)
+                            : AppColors.border,
+                        width: g.favorite ? 1.5 : 1,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () => showDialog<void>(
@@ -253,6 +416,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                   g.iconPng!,
                                   width: 28,
                                   height: 28,
+                                  cacheWidth: 56,
+                                  cacheHeight: 56,
                                 ),
                               )
                             else

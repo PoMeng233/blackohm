@@ -48,3 +48,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/tray.ico
+    - assets/icon_source.png

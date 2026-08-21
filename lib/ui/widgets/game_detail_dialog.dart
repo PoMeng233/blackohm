@@ -83,6 +83,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                             widget.game.iconPng!,
                             width: 44,
                             height: 44,
+                            cacheWidth: 88,
+                            cacheHeight: 88,
                           ),
                         )
                       : Container(

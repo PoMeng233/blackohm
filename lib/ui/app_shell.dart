@@ -173,11 +173,13 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: AppColors.accent),
                           ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.bolt,
-                              color: AppColors.accent,
-                              size: 22,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: Image.asset(
+                              'assets/icon_source.png',
+                              cacheWidth: 64,
+                              cacheHeight: 64,
+                              fit: BoxFit.cover,
                             ),
                           ),
                         ),
@@ -276,7 +278,15 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                 borderRadius: BorderRadius.circular(7),
                 border: Border.all(color: AppColors.accent),
               ),
-              child: const Icon(Icons.bolt, color: AppColors.accent, size: 15),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  'assets/icon_source.png',
+                  cacheWidth: 48,
+                  cacheHeight: 48,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
             const SizedBox(width: 9),
             const Text(

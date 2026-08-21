@@ -11,6 +11,11 @@ import 'data/game_repository.dart';
 import 'data/session_repository.dart';
 import 'data/settings_repository.dart';
 import 'features/tracking/tracking_engine.dart';
+import 'ui/theme.dart';
+
+final themePaletteProvider = StateProvider<ThemePalette>(
+  (ref) => ThemePalette.obsidian,
+);
 
 // ── 数据层 ────────────────────────────────────────────────────
 final databaseProvider = Provider<AppDatabase>((ref) {

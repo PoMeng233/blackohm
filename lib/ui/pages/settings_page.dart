@@ -123,6 +123,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         const SizedBox(height: 24),
+        _sectionTitle('Material 3 配色方案'),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: DropdownButtonFormField<ThemePalette>(
+              initialValue: ref.watch(themePaletteProvider),
+              decoration: const InputDecoration(labelText: '界面配色'),
+              items: ThemePalette.values
+                  .map(
+                    (palette) => DropdownMenuItem(
+                      value: palette,
+                      child: Text(paletteLabel(palette)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (palette) {
+                if (palette != null) {
+                  ref.read(themePaletteProvider.notifier).state = palette;
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         _sectionTitle('系统与生命周期'),
         const SizedBox(height: 10),
         Card(

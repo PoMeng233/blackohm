@@ -90,8 +90,12 @@ class _GameCardState extends State<GameCard>
                 border: Border.all(
                   color: _isActive
                       ? AppColors.accent
-                      : (_hovering ? AppColors.border : Colors.transparent),
-                  width: _isActive ? 1.5 : 1,
+                      : (widget.game.favorite
+                            ? const Color(0xFFFFC857)
+                            : (_hovering
+                                  ? AppColors.border
+                                  : Colors.transparent)),
+                  width: _isActive || widget.game.favorite ? 1.5 : 1,
                 ),
                 boxShadow: _isActive
                     ? [
@@ -101,6 +105,14 @@ class _GameCardState extends State<GameCard>
                           ),
                           blurRadius: 18,
                           spreadRadius: 2,
+                        ),
+                      ]
+                    : widget.game.favorite
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFFFFC857).withAlpha(38),
+                          blurRadius: 9,
+                          spreadRadius: 1,
                         ),
                       ]
                     : null,
@@ -124,6 +136,8 @@ class _GameCardState extends State<GameCard>
                           widget.game.iconPng!,
                           width: 64,
                           height: 64,
+                          cacheWidth: 96,
+                          cacheHeight: 96,
                           fit: BoxFit.contain,
                         ),
                       )
