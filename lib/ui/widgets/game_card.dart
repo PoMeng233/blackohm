@@ -33,57 +33,12 @@ class GameCard extends StatefulWidget {
   State<GameCard> createState() => _GameCardState();
 }
 
-class _GameCardState extends State<GameCard>
-    with SingleTickerProviderStateMixin {
-  /// 静态呼吸光效层：模糊阴影只在首次绘制时栅格化一次，
-  /// 之后动画仅调制图层 alpha（FadeTransition），不再逐帧重算高斯模糊。
-  static const Decoration _glowDecoration = BoxDecoration(
-    borderRadius: BorderRadius.all(Radius.circular(12)),
-    border: Border.fromBorderSide(
-      BorderSide(color: AppColors.accent, width: 2),
-    ),
-    boxShadow: [
-      BoxShadow(color: AppColors.accent, blurRadius: 16, spreadRadius: 3),
-    ],
-  );
-
-  late final AnimationController _glowController;
-  late final Animation<double> _glowAnimation;
+class _GameCardState extends State<GameCard> {
   bool _hovering = false;
 
   bool get _isActive =>
       widget.activeState.isActive &&
       widget.activeState.gameId == widget.game.id;
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    _glowAnimation = Tween<double>(begin: 0.2, end: 0.85).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-    if (_isActive) _glowController.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant GameCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_isActive && !_glowController.isAnimating) {
-      _glowController.repeat(reverse: true);
-    } else if (!_isActive && _glowController.isAnimating) {
-      _glowController.stop();
-      _glowController.reset();
-    }
-  }
-
-  @override
-  void dispose() {
-    _glowController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,19 +56,6 @@ class _GameCardState extends State<GameCard>
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // 呼吸光效层：RepaintBoundary 隔离，动画期间仅合成 alpha。
-            Positioned(
-              left: -8,
-              top: -8,
-              right: -8,
-              bottom: -8,
-              child: FadeTransition(
-                opacity: _glowAnimation,
-                child: const RepaintBoundary(
-                  child: DecoratedBox(decoration: _glowDecoration),
-                ),
-              ),
-            ),
             Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
@@ -121,7 +63,7 @@ class _GameCardState extends State<GameCard>
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: _isActive
-                      ? AppColors.accent
+                      ? context.interactiveColor
                       : (widget.game.favorite
                             ? const Color(0xFFFFC857)
                             : (_hovering
@@ -216,16 +158,16 @@ class _GameCardState extends State<GameCard>
                               Container(
                                 width: 7,
                                 height: 7,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.accent,
+                                decoration: BoxDecoration(
+                                  color: context.interactiveColor,
                                   shape: BoxShape.circle,
                                 ),
                               ),
                               const SizedBox(width: 5),
                               Text(
                                 formatStopwatch(widget.activeState.elapsedMs),
-                                style: const TextStyle(
-                                  color: AppColors.accent,
+                                style: TextStyle(
+                                  color: context.interactiveColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   fontFeatures: [FontFeature.tabularFigures()],
@@ -260,13 +202,14 @@ class _GameCardState extends State<GameCard>
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.leBadge.withAlpha(40),
+                                  color: context.secondaryInteractiveColor
+                                      .withAlpha(40),
                                   borderRadius: BorderRadius.circular(3),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'LE',
                                   style: TextStyle(
-                                    color: AppColors.leBadge,
+                                    color: context.secondaryInteractiveColor,
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -291,9 +234,9 @@ class _GameCardState extends State<GameCard>
                               tooltip: '运行文件',
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.play_arrow_rounded,
-                                color: AppColors.accent,
+                                color: context.interactiveColor,
                                 size: 18,
                               ),
                               onPressed: widget.onLaunch,
@@ -339,7 +282,7 @@ class _GameCardState extends State<GameCard>
           value: 'launch',
           child: Row(
             children: [
-              const Icon(Icons.play_arrow, color: AppColors.accent, size: 18),
+              Icon(Icons.play_arrow, color: context.interactiveColor, size: 18),
               const SizedBox(width: 8),
               Text(widget.game.useLocaleEmulator ? '经 LE 启动' : '直接启动'),
             ],

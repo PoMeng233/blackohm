@@ -18,6 +18,13 @@ void main() {
     expect(result.last.title, '中文标题');
   });
 
+  test('搜索词清洗发行信息，保留视觉小说主体标题', () {
+    expect(
+      normalizeBangumiSearchQuery('(18禁ゲーム) [230224] [枕] サクラノ刻 ―櫻の森の下を歩む― 通常版'),
+      'サクラノ刻 ―櫻の森の下を歩む―',
+    );
+  });
+
   test('空响应或非法 JSON 返回空候选', () {
     expect(parseBangumiSubjectsJson('{}'), isEmpty);
     expect(parseBangumiSubjectsJson('not-json'), isEmpty);

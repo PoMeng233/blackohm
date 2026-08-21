@@ -38,9 +38,12 @@ class _DropOverlayState extends State<DropOverlay> {
                 child: Container(
                   margin: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withAlpha(20),
+                    color: context.interactiveColor.withAlpha(20),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.accent, width: 2),
+                    border: Border.all(
+                      color: context.interactiveColor,
+                      width: 2,
+                    ),
                   ),
                   child: Center(
                     child: Container(
@@ -51,21 +54,21 @@ class _DropOverlayState extends State<DropOverlay> {
                       decoration: BoxDecoration(
                         color: AppColors.surfaceActive,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.accent),
-                        boxShadow: const [
+                        border: Border.all(color: context.interactiveColor),
+                        boxShadow: [
                           BoxShadow(
-                            color: AppColors.accentGlow,
+                            color: context.interactiveColor.withAlpha(100),
                             blurRadius: 24,
                             spreadRadius: 2,
                           ),
                         ],
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             Icons.drive_folder_upload,
-                            color: AppColors.accent,
+                            color: context.interactiveColor,
                             size: 28,
                           ),
                           SizedBox(width: 12),

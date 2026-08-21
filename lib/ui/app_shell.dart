@@ -111,7 +111,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
           content: Text(
             '已录入 ${report.added.length} 款游戏：${report.added.join('、')}',
           ),
-          backgroundColor: AppColors.accent,
+          backgroundColor: context.interactiveColor,
         ),
       );
     }
@@ -138,7 +138,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('已录入：${chosen.description ?? chosen.path}'),
-                  backgroundColor: AppColors.accent,
+                  backgroundColor: context.interactiveColor,
                 ),
               );
             }
@@ -224,18 +224,10 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                                   height: 10,
                                   decoration: BoxDecoration(
                                     color: active
-                                        ? AppColors.accent
+                                        ? context.interactiveColor
                                         : AppColors.textMuted,
                                     shape: BoxShape.circle,
-                                    boxShadow: active
-                                        ? const [
-                                            BoxShadow(
-                                              color: AppColors.accentGlow,
-                                              blurRadius: 8,
-                                              spreadRadius: 2,
-                                            ),
-                                          ]
-                                        : null,
+                                    boxShadow: null,
                                   ),
                                 ),
                               ),
@@ -346,7 +338,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
           color: selected ? AppColors.surfaceActive : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: selected
-              ? Border.all(color: AppColors.accent.withAlpha(80))
+              ? Border.all(color: context.interactiveColor.withAlpha(80))
               : null,
         ),
         child: Column(
@@ -355,14 +347,18 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
             Icon(
               icon,
               size: 22,
-              color: selected ? AppColors.accent : AppColors.textSecondary,
+              color: selected
+                  ? context.interactiveColor
+                  : AppColors.textSecondary,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 10,
-                color: selected ? AppColors.accent : AppColors.textSecondary,
+                color: selected
+                    ? context.interactiveColor
+                    : AppColors.textSecondary,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
             ),

@@ -19,6 +19,14 @@ String paletteLabel(ThemePalette palette) => switch (palette) {
   ThemePalette.amber => '琥珀',
 };
 
+extension AppThemeColors on BuildContext {
+  Color get interactiveColor => Theme.of(this).colorScheme.primary;
+  Color get interactiveContainer => Theme.of(this).colorScheme.primaryContainer;
+  Color get interactiveOnColor => Theme.of(this).colorScheme.onPrimary;
+  Color get secondaryInteractiveColor => Theme.of(this).colorScheme.secondary;
+  Color get outlineColor => Theme.of(this).colorScheme.outline;
+}
+
 abstract final class AppColors {
   static const bgDark = Color(0xFF0D0F12);
   static const surface = Color(0xFF16191E);
@@ -28,7 +36,6 @@ abstract final class AppColors {
 
   /// 呼吸光效与前台活跃高亮色（赛博青绿）
   static const accent = Color(0xFF00E5A3);
-  static const accentGlow = Color(0x6600E5A3);
 
   /// 次级强调（转区/LE 标签）
   static const leBadge = Color(0xFF8B5CF6);
@@ -76,7 +83,7 @@ ThemeData buildDarkTheme({ThemePalette palette = ThemePalette.obsidian}) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.accent),
+        borderSide: BorderSide(color: scheme.primary),
       ),
     ),
   );

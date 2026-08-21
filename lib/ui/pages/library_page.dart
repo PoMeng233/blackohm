@@ -230,8 +230,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     : const Icon(Icons.add_rounded, size: 17),
                 label: const Text('添加游戏'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.bgDark,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -455,16 +455,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               Container(
                                 width: 8,
                                 height: 8,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.accent,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 formatStopwatch(activeState.elapsedMs),
-                                style: const TextStyle(
-                                  color: AppColors.accent,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -479,9 +479,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             const SizedBox(width: 12),
                             IconButton(
                               tooltip: '运行文件',
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.play_arrow,
-                                color: AppColors.accent,
+                                color: Theme.of(context).colorScheme.primary,
                                 size: 20,
                               ),
                               onPressed: () => _launchGame(g, launcher),

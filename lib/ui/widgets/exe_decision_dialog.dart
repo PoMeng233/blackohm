@@ -34,9 +34,13 @@ class ExeDecisionDialog extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.alt_route, color: AppColors.accent, size: 22),
+                  Icon(
+                    Icons.alt_route,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 22,
+                  ),
                   SizedBox(width: 10),
                   Text(
                     '选择主启动程序',

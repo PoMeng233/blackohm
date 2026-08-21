@@ -97,11 +97,35 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       );
       return;
     }
-    setState(() => _backgroundBusy = true);
-    final candidates = await _bangumiSearch.search(
-      query: _titleCtrl.text.trim(),
-      token: token,
+    final query = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        var value = normalizeBangumiSearchQuery(_titleCtrl.text);
+        return AlertDialog(
+          title: const Text('搜索 Bangumi 游戏封面'),
+          content: TextField(
+            autofocus: true,
+            controller: TextEditingController(text: value),
+            decoration: const InputDecoration(labelText: '搜索关键词'),
+            onChanged: (next) => value = next,
+            onSubmitted: (_) => Navigator.pop(dialogContext, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, value.trim()),
+              child: const Text('搜索'),
+            ),
+          ],
+        );
+      },
     );
+    if (query == null || query.trim().isEmpty || !mounted) return;
+    setState(() => _backgroundBusy = true);
+    final candidates = await _bangumiSearch.search(query: query, token: token);
     if (!mounted) return;
     setState(() => _backgroundBusy = false);
     if (candidates.isEmpty) {
@@ -299,8 +323,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                         const SizedBox(height: 2),
                         Text(
                           '总时长：${formatPlayDuration(widget.game.totalPlaySeconds)}',
-                          style: const TextStyle(
-                            color: AppColors.accent,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -328,7 +352,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                 children: [
                   Checkbox(
                     value: _useLe,
-                    activeColor: AppColors.leBadge,
+                    activeColor: Theme.of(context).colorScheme.secondary,
                     onChanged: (v) => setState(() => _useLe = v ?? false),
                   ),
                   const Text(
@@ -407,8 +431,10 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                                 const Spacer(),
                                 Text(
                                   formatPlayDuration(s.durationSeconds),
-                                  style: const TextStyle(
-                                    color: AppColors.accent,
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -436,8 +462,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                   const SizedBox(width: 8),
                   FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: AppColors.bgDark,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                     onPressed: _save,
                     child: const Text(

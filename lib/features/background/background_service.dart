@@ -18,6 +18,20 @@ class BangumiImageCandidate {
   final String imageUrl;
 }
 
+String normalizeBangumiSearchQuery(String value) {
+  var query = value.trim();
+  query = query.replaceAll(
+    RegExp(r'\([^)]*(?:禁|ゲーム|版|通常|限定|特典)[^)]*\)', caseSensitive: false),
+    ' ',
+  );
+  query = query.replaceAll(RegExp(r'\[[^\]]*\]'), ' ');
+  query = query.replaceAll(
+    RegExp(r'(通常版|初回版|限定版|DL版|高清版|中文版)', caseSensitive: false),
+    ' ',
+  );
+  return query.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
 class BangumiImageSearchService {
   Future<List<BangumiImageCandidate>> search({
     required String query,
@@ -29,14 +43,25 @@ class BangumiImageSearchService {
       final request = await client.postUrl(
         Uri.parse('https://api.bgm.tv/v0/search/subjects?limit=10&offset=0'),
       );
-      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      request.headers.set('Authorization', 'Bearer ${token.trim()}');
+      request.headers.set(
+        HttpHeaders.contentTypeHeader,
+        'application/json; charset=utf-8',
+      );
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
+      final auth = token.trim();
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
+      );
       request.write(
         jsonEncode({
-          'keyword': query.trim(),
+          'keyword': normalizeBangumiSearchQuery(query),
           'filter': {
             'type': [4],
-            'nsfw': false,
+            // Bangumi 的视觉小说条目大量标记为 NSFW；用户已配置 token，
+            // 官方接口只有在开放该过滤时才会返回这些受限 subject。
+            'nsfw': true,
           },
           'sort': 'match',
         }),

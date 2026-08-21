@@ -71,9 +71,9 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.query_stats_rounded,
-                  color: AppColors.accent,
+                  color: Theme.of(context).colorScheme.primary,
                   size: 26,
                 ),
                 const SizedBox(width: 10),
@@ -122,7 +122,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                     '当前范围',
                     formatPlayDuration(model.rangeSeconds),
                     Icons.timelapse,
-                    AppColors.accent,
+                    Theme.of(context).colorScheme.primary,
                   ),
                   _MetricCard(
                     '今日游玩',
@@ -134,7 +134,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                     '库内总时长',
                     formatPlayDuration(model.lifetimeSeconds),
                     Icons.auto_stories_rounded,
-                    AppColors.leBadge,
+                    Theme.of(context).colorScheme.secondary,
                   ),
                   _MetricCard(
                     '范围内会话',
@@ -200,6 +200,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                       start: bounds.start,
                       end: bounds.end,
                       daily: model.daily,
+                      monthly: _range == InsightsRange.year,
                     ),
             ),
             const SizedBox(height: 18),
@@ -361,6 +362,7 @@ class _ActivityHeatmap extends StatelessWidget {
     final gridEnd = lastDay.add(Duration(days: 6 - (lastDay.weekday % 7)));
     final columns = (gridEnd.difference(gridStart).inDays + 1) ~/ 7;
     final maxSeconds = daily.values.fold<int>(0, math.max);
+    final primary = Theme.of(context).colorScheme.primary;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -390,7 +392,7 @@ class _ActivityHeatmap extends StatelessWidget {
                           height: 14,
                           decoration: BoxDecoration(
                             color: inRange
-                                ? _heatColor(seconds, maxSeconds)
+                                ? _heatColor(seconds, maxSeconds, primary)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(3),
                             border: inRange
@@ -412,13 +414,10 @@ class _ActivityHeatmap extends StatelessWidget {
   }
 }
 
-Color _heatColor(int seconds, int maxSeconds) {
+Color _heatColor(int seconds, int maxSeconds, Color primary) {
   if (seconds <= 0) return AppColors.surfaceActive;
   final ratio = maxSeconds <= 0 ? 0.0 : seconds / maxSeconds;
-  if (ratio < .25) return const Color(0xFF166534);
-  if (ratio < .5) return const Color(0xFF15803D);
-  if (ratio < .75) return const Color(0xFF16A34A);
-  return AppColors.accent;
+  return Color.lerp(primary.withAlpha(80), primary, ratio.clamp(0.0, 1.0))!;
 }
 
 String _dateLabel(DateTime date) =>
@@ -429,67 +428,85 @@ class _DailyBarChart extends StatelessWidget {
     required this.start,
     required this.end,
     required this.daily,
+    required this.monthly,
   });
   final DateTime start;
   final DateTime end;
   final Map<DateTime, int> daily;
+  final bool monthly;
 
   @override
   Widget build(BuildContext context) {
-    final days = end.difference(start).inDays;
-    final maxSeconds = daily.values.fold<int>(0, math.max);
+    final buckets = <DateTime, int>{};
+    for (
+      var date = start;
+      date.isBefore(end);
+      date = date.add(const Duration(days: 1))
+    ) {
+      final day = DateTime(date.year, date.month, date.day);
+      final key = monthly ? DateTime(day.year, day.month) : day;
+      buckets[key] = (buckets[key] ?? 0) + (daily[day] ?? 0);
+    }
+    final entries = buckets.entries.toList(growable: false);
+    final maxSeconds = entries.fold<int>(
+      0,
+      (max, entry) => math.max(max, entry.value),
+    );
+    final primary = Theme.of(context).colorScheme.primary;
     return SizedBox(
       height: 190,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(days, (index) {
-            final date = start.add(Duration(days: index));
-            final key = DateTime(date.year, date.month, date.day);
-            final seconds = daily[key] ?? 0;
-            final ratio = maxSeconds == 0 ? 0.0 : seconds / maxSeconds;
-            return Tooltip(
-              message: '${_dateLabel(date)}\\n${formatPlayDuration(seconds)}',
-              child: Container(
-                width: 22,
-                margin: const EdgeInsets.only(right: 5),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (seconds > 0)
-                      Text(
-                        formatPlayDuration(seconds),
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 9,
+          children: entries
+              .map((entry) {
+                final ratio = maxSeconds == 0 ? 0.0 : entry.value / maxSeconds;
+                final label = monthly
+                    ? '${entry.key.year}/${entry.key.month}'
+                    : '${entry.key.month}/${entry.key.day}';
+                return Tooltip(
+                  message: '$label\n${formatPlayDuration(entry.value)}',
+                  child: Container(
+                    width: monthly ? 42 : 22,
+                    margin: const EdgeInsets.only(right: 6),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (entry.value > 0 && !monthly)
+                          Text(
+                            formatPlayDuration(entry.value),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 9,
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: math.max(4.0, ratio * 125),
+                          decoration: BoxDecoration(
+                            color: _heatColor(entry.value, maxSeconds, primary),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
                         ),
-                      ),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: math.max(4.0, ratio * 125),
-                      decoration: BoxDecoration(
-                        color: _heatColor(seconds, maxSeconds),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(4),
+                        const SizedBox(height: 7),
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 9,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      '${date.month}/${date.day}',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
+                  ),
+                );
+              })
+              .toList(growable: false),
         ),
       ),
     );
@@ -581,8 +598,8 @@ class _RankRow extends StatelessWidget {
                   ),
                   Text(
                     formatPlayDuration(game.seconds),
-                    style: const TextStyle(
-                      color: AppColors.accent,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
@@ -596,8 +613,8 @@ class _RankRow extends StatelessWidget {
                   value: ratio,
                   minHeight: 5,
                   backgroundColor: AppColors.surfaceActive,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.accent,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -690,8 +707,8 @@ class _SessionRow extends StatelessWidget {
         ),
         Text(
           formatPlayDuration(session.durationSeconds),
-          style: const TextStyle(
-            color: AppColors.accent,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
             fontSize: 11,
             fontWeight: FontWeight.bold,
           ),
@@ -717,14 +734,16 @@ class _ActivePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.accent.withAlpha(24),
-        border: Border.all(color: AppColors.accent.withAlpha(100)),
+        color: Theme.of(context).colorScheme.primary.withAlpha(24),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withAlpha(100),
+        ),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         '${game?.title ?? '游戏'} · ${formatStopwatch(active.elapsedMs)}',
-        style: const TextStyle(
-          color: AppColors.accent,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.primary,
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
