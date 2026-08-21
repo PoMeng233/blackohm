@@ -49,6 +49,14 @@ class SessionRepository {
             lastPlayedAt: Value(endedAt)));
   }
 
+  /// 删除空会话行（秒数不足 1s 的噪声会话）。
+  Future<void> deleteSession(int sessionId) async {
+    if (sessionId <= 0) return;
+    await (_db.delete(_db.playSessions)
+          ..where((s) => s.id.equals(sessionId)))
+        .go();
+  }
+
   /// 单游戏的会话历史（详情弹窗）。
   Stream<List<PlaySession>> watchForGame(int gameId) {
     final q = _db.select(_db.playSessions)

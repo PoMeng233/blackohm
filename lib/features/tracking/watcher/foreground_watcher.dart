@@ -38,6 +38,9 @@ Future<Isolate> spawnForegroundWatcher(SendPort replyTo) {
       debugName: 'foreground-watcher');
 }
 
+/// 主 isolate 调用：触发 watcher 优雅关机（内核 Event 跨 isolate 有效）。
+void signalShutdown(int eventHandle) => w.setEvent(eventHandle);
+
 void _watcherMain(_WatcherConfig config) {
   final reply = config.replyTo;
 
