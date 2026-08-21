@@ -53,7 +53,7 @@ ThemeData buildDarkTheme({ThemePalette palette = ThemePalette.obsidian}) {
       surface: AppColors.surface,
       error: AppColors.error,
     ),
-    fontFamily: 'Segoe UI',
+    fontFamily: 'MiSans',
     cardTheme: CardThemeData(
       color: AppColors.surface,
       elevation: 0,

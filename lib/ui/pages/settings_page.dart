@@ -4,6 +4,7 @@ library;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
 import '../../providers.dart';
@@ -20,6 +21,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _lePathCtrl;
   late final TextEditingController _leArgsCtrl;
   late final TextEditingController _leProfileCtrl;
+  late final TextEditingController _bangumiTokenCtrl;
 
   @override
   void initState() {
@@ -28,6 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _lePathCtrl = TextEditingController(text: s.leProcPath);
     _leArgsCtrl = TextEditingController(text: s.leArgsTemplate);
     _leProfileCtrl = TextEditingController(text: s.leProfile);
+    _bangumiTokenCtrl = TextEditingController(text: s.bangumiToken);
   }
 
   @override
@@ -35,6 +38,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _lePathCtrl.dispose();
     _leArgsCtrl.dispose();
     _leProfileCtrl.dispose();
+    _bangumiTokenCtrl.dispose();
     super.dispose();
   }
 
@@ -123,6 +127,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         const SizedBox(height: 24),
+        _sectionTitle('BGM 在线背景搜索'),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _bangumiTokenCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Bangumi API Token',
+                    helperText: '仅在用户主动搜索背景时使用，保存在本地设置中',
+                  ),
+                  onChanged: ref
+                      .read(settingsProvider.notifier)
+                      .setBangumiToken,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.key_rounded, size: 17),
+                      label: const Text('获取 Token'),
+                      onPressed: () => launchUrl(
+                        Uri.parse('https://next.bgm.tv/demo/access-token'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.menu_book_rounded, size: 17),
+                      label: const Text('查看 API 文档'),
+                      onPressed: () => launchUrl(
+                        Uri.parse('https://bangumi.github.io/api/#/'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         _sectionTitle('Material 3 配色方案'),
         const SizedBox(height: 10),
         Card(
@@ -180,7 +230,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         const SizedBox(height: 24),
-        _sectionTitle('关于 BlackOhm'),
+        _sectionTitle('关于 BlackOhm · 视觉小说记录器'),
         const SizedBox(height: 10),
         const Card(
           child: Padding(
@@ -189,7 +239,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'BlackOhm v0.1.0 (Windows Native AOT)',
+                  'BlackOhm · Visual Novel Recorder',
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -197,10 +247,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  '超轻量视觉小说资产管理与前台焦点游玩记录器。\n'
-                  '• 事件驱动 SetWinEventHook 前台捕获，后台 CPU 占用 < 0.1%\n'
-                  '• 3 秒防抖合并、锁屏/睡眠即停、60 秒批量落盘\n'
-                  '• 纯本地 SQLite 3 WAL 存储，零网络强依赖',
+                  '专为视觉小说设计的本地游玩记录器。\n'
+                  '• 只记录真正处于前台焦点的游玩时间\n'
+                  '• 不上传游戏路径、存档或游玩记录\n'
+                  '• 支持本地背景、BGM 候选和精准 Session 历史',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 12,

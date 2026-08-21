@@ -33,6 +33,18 @@ class GameCard extends StatefulWidget {
 
 class _GameCardState extends State<GameCard>
     with SingleTickerProviderStateMixin {
+  /// 静态呼吸光效层：模糊阴影只在首次绘制时栅格化一次，
+  /// 之后动画仅调制图层 alpha（FadeTransition），不再逐帧重算高斯模糊。
+  static const Decoration _glowDecoration = BoxDecoration(
+    borderRadius: BorderRadius.all(Radius.circular(12)),
+    border: Border.fromBorderSide(
+      BorderSide(color: AppColors.accent, width: 2),
+    ),
+    boxShadow: [
+      BoxShadow(color: AppColors.accent, blurRadius: 16, spreadRadius: 3),
+    ],
+  );
+
   late final AnimationController _glowController;
   late final Animation<double> _glowAnimation;
   bool _hovering = false;
@@ -73,17 +85,29 @@ class _GameCardState extends State<GameCard>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        final glowOpacity = _isActive ? _glowAnimation.value : 0.0;
-        return MouseRegion(
-          onEnter: (_) => setState(() => _hovering = true),
-          onExit: (_) => setState(() => _hovering = false),
-          child: GestureDetector(
-            onTap: widget.onOpenDetail,
-            onSecondaryTapUp: (details) => _showContextMenu(context, details),
-            child: Container(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        onTap: widget.onOpenDetail,
+        onSecondaryTapUp: (details) => _showContextMenu(context, details),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // 呼吸光效层：RepaintBoundary 隔离，动画期间仅合成 alpha。
+            Positioned(
+              left: -8,
+              top: -8,
+              right: -8,
+              bottom: -8,
+              child: FadeTransition(
+                opacity: _glowAnimation,
+                child: const RepaintBoundary(
+                  child: DecoratedBox(decoration: _glowDecoration),
+                ),
+              ),
+            ),
+            Container(
               decoration: BoxDecoration(
                 color: _hovering ? AppColors.surfaceHover : AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
@@ -97,17 +121,7 @@ class _GameCardState extends State<GameCard>
                                   : Colors.transparent)),
                   width: _isActive || widget.game.favorite ? 1.5 : 1,
                 ),
-                boxShadow: _isActive
-                    ? [
-                        BoxShadow(
-                          color: AppColors.accent.withValues(
-                            alpha: glowOpacity,
-                          ),
-                          blurRadius: 18,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : widget.game.favorite
+                boxShadow: widget.game.favorite
                     ? [
                         BoxShadow(
                           color: const Color(0xFFFFC857).withAlpha(38),
@@ -117,12 +131,8 @@ class _GameCardState extends State<GameCard>
                       ]
                     : null,
               ),
-              child: child,
-            ),
-          ),
-        );
-      },
-      child: Padding(
+              child: Padding(
+
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,6 +272,10 @@ class _GameCardState extends State<GameCard>
                   onPressed: widget.onOpenDirectory,
                 ),
               ],
+            ),
+          ],
+        ),
+              ),
             ),
           ],
         ),

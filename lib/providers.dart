@@ -10,6 +10,7 @@ import 'core/database/app_database.dart';
 import 'data/game_repository.dart';
 import 'data/session_repository.dart';
 import 'data/settings_repository.dart';
+import 'features/memory/memory_trim_service.dart';
 import 'features/tracking/tracking_engine.dart';
 import 'ui/theme.dart';
 
@@ -64,6 +65,15 @@ final trackingStateProvider = StreamProvider<TrackingPublicState>(
   (ref) => ref.watch(trackingEngineProvider).states,
 );
 
+// ── 内存治理 ──────────────────────────────────────────────────
+/// 托盘/空闲态工作集修剪。AppShell 在 show/hide 时同步 windowVisible。
+final memoryTrimProvider = Provider<MemoryTrimService>((ref) {
+  final service = MemoryTrimService();
+  ref.onDispose(service.dispose);
+  service.start();
+  return service;
+});
+
 // ── 设置 ──────────────────────────────────────────────────────
 class AppSettingsState {
   const AppSettingsState({
@@ -73,6 +83,7 @@ class AppSettingsState {
     this.startHidden = false,
     this.closeToTray = true,
     this.trackingPaused = false,
+    this.bangumiToken = '',
   });
 
   final String leProcPath;
@@ -81,6 +92,7 @@ class AppSettingsState {
   final bool startHidden;
   final bool closeToTray;
   final bool trackingPaused;
+  final String bangumiToken;
 
   AppSettingsState copyWith({
     String? leProcPath,
@@ -89,6 +101,7 @@ class AppSettingsState {
     bool? startHidden,
     bool? closeToTray,
     bool? trackingPaused,
+    String? bangumiToken,
   }) => AppSettingsState(
     leProcPath: leProcPath ?? this.leProcPath,
     leArgsTemplate: leArgsTemplate ?? this.leArgsTemplate,
@@ -121,6 +134,7 @@ class SettingsController extends StateNotifier<AppSettingsState> {
       defaultValue: true,
     );
     final paused = await _repo.getBool(SettingsKeys.trackingPaused);
+    final bangumiToken = await _repo.get(SettingsKeys.bangumiToken);
     state = AppSettingsState(
       leProcPath: lePath,
       leArgsTemplate: leArgs,
@@ -128,6 +142,7 @@ class SettingsController extends StateNotifier<AppSettingsState> {
       startHidden: startHidden,
       closeToTray: closeToTray,
       trackingPaused: paused,
+      bangumiToken: bangumiToken,
     );
     _engine.setPaused(paused);
   }
@@ -161,6 +176,11 @@ class SettingsController extends StateNotifier<AppSettingsState> {
     state = state.copyWith(trackingPaused: v);
     await _repo.setBool(SettingsKeys.trackingPaused, v);
     _engine.setPaused(v);
+  }
+
+  Future<void> setBangumiToken(String v) async {
+    state = state.copyWith(bangumiToken: v);
+    await _repo.set(SettingsKeys.bangumiToken, v.trim());
   }
 }
 

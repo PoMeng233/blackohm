@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../features/tracking/session_merge.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -610,7 +611,7 @@ class _RankRow extends StatelessWidget {
 
 class _RecentSessions extends StatelessWidget {
   const _RecentSessions({required this.sessions, required this.gameFor});
-  final List<PlaySession> sessions;
+  final List<MergedPlaySession> sessions;
   final Game? Function(int? id) gameFor;
 
   @override
@@ -635,7 +636,7 @@ class _RecentSessions extends StatelessWidget {
 
 class _SessionRow extends StatelessWidget {
   const _SessionRow({required this.session, required this.game});
-  final PlaySession session;
+  final MergedPlaySession session;
   final Game? game;
 
   @override
@@ -792,6 +793,7 @@ class _InsightsModel {
         cursor = chunkEnd;
       }
     }
+    final mergedSessions = mergeSessions(sessions);
     final gameMap = {for (final game in games) game.id: game};
     final ranked =
         byGame.entries
@@ -807,13 +809,10 @@ class _InsightsModel {
         0,
         (sum, game) => sum + game.totalPlaySeconds,
       ),
-      sessionCount: sessions.where((s) => s.durationSeconds > 0).length,
+      sessionCount: mergedSessions.length,
       daily: daily,
       topGames: ranked.take(5).toList(growable: false),
-      recent: sessions
-          .where((s) => s.durationSeconds > 0)
-          .take(5)
-          .toList(growable: false),
+      recent: mergedSessions.reversed.take(5).toList(growable: false),
       gameFor: (id) => id == null ? null : gameMap[id],
     );
   }
@@ -824,6 +823,6 @@ class _InsightsModel {
   final int sessionCount;
   final Map<DateTime, int> daily;
   final List<_RangeGame> topGames;
-  final List<PlaySession> recent;
+  final List<MergedPlaySession> recent;
   final Game? Function(int? id) gameFor;
 }

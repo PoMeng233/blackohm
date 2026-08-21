@@ -51,6 +51,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
         ref.read(settingsProvider.notifier).setTrackingPaused(!cur);
       },
       onShowWindow: () async {
+        ref.read(memoryTrimProvider).windowVisible = true;
         await windowManager.show();
         await windowManager.focus();
       },
@@ -87,6 +88,11 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     final closeToTray = ref.read(settingsProvider).closeToTray;
     if (closeToTray) {
       await windowManager.hide();
+      // 隐藏到托盘：清缓存并换出工作集（常态内存显著回落）。
+      final trim = ref.read(memoryTrimProvider);
+      trim
+        ..windowVisible = false
+        ..notifyWindowHidden();
     } else {
       await ref.read(trackingEngineProvider).stop();
       exit(0);
@@ -171,7 +177,6 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                           decoration: BoxDecoration(
                             color: AppColors.surfaceActive,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.accent),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(9),
@@ -276,7 +281,6 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
               decoration: BoxDecoration(
                 color: AppColors.surfaceActive,
                 borderRadius: BorderRadius.circular(7),
-                border: Border.all(color: AppColors.accent),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(6),

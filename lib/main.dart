@@ -34,6 +34,13 @@ Future<void> main() async {
       .read(settingsRepoProvider)
       .getBool(SettingsKeys.startHidden);
 
+  // 内存治理：收紧图像缓存上限（默认 1000 张 / 100 MiB，远超本应用需求），
+  // 并尽早启动托盘态工作集修剪服务。
+  final imageCache = PaintingBinding.instance.imageCache;
+  imageCache.maximumSize = 128;
+  imageCache.maximumSizeBytes = 8 << 20;
+  container.read(memoryTrimProvider);
+
   if (!startHidden) {
     await windowManager.show();
     await windowManager.focus();

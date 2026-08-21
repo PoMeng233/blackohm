@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
 import '../theme.dart';
 
@@ -184,7 +185,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                   child: StreamBuilder<List<PlaySession>>(
                     stream: sessionsStream,
                     builder: (context, snapshot) {
-                      final list = snapshot.data ?? const [];
+                      final list = mergeSessions(snapshot.data ?? const []);
                       if (list.isEmpty) {
                         return const Center(
                           child: Text(
