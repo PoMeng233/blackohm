@@ -1,11 +1,15 @@
 /// 游戏详情与会话历史弹窗。
 library;
 
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../features/background/background_service.dart';
 import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -24,6 +28,11 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   late final TextEditingController _argsCtrl;
   late final TextEditingController _profileCtrl;
   late bool _useLe;
+  String? _backgroundPath;
+  bool _backgroundBusy = false;
+
+  final _backgroundCache = BackgroundCacheService();
+  final _bangumiSearch = BangumiImageSearchService();
 
   @override
   void initState() {
@@ -32,6 +41,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _argsCtrl = TextEditingController(text: widget.game.launchArgs);
     _profileCtrl = TextEditingController(text: widget.game.leProfile);
     _useLe = widget.game.useLocaleEmulator;
+    _backgroundPath = widget.game.backgroundPath;
   }
 
   @override
@@ -40,6 +50,117 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _argsCtrl.dispose();
     _profileCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _chooseLocalBackground() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: '选择背景图片',
+      type: FileType.image,
+    );
+    final source = result?.files.single.path;
+    if (source == null || !mounted) return;
+    setState(() => _backgroundBusy = true);
+    final cached = await _backgroundCache.copyLocal(source);
+    if (!mounted) return;
+    if (cached == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('图片格式不支持或文件超过 12 MB')));
+    } else {
+      await ref
+          .read(gameRepoProvider)
+          .update(
+            widget.game.id,
+            GamesCompanion(backgroundPath: Value(cached)),
+          );
+      setState(() => _backgroundPath = cached);
+    }
+    if (mounted) setState(() => _backgroundBusy = false);
+  }
+
+  Future<void> _clearBackground() async {
+    await _backgroundCache.delete(_backgroundPath);
+    await ref
+        .read(gameRepoProvider)
+        .update(
+          widget.game.id,
+          const GamesCompanion(backgroundPath: Value(null)),
+        );
+    if (mounted) setState(() => _backgroundPath = null);
+  }
+
+  Future<void> _searchBangumi() async {
+    final token = ref.read(settingsProvider).bangumiToken;
+    if (token.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先在设置中填写 Bangumi API Token')),
+      );
+      return;
+    }
+    setState(() => _backgroundBusy = true);
+    final candidates = await _bangumiSearch.search(
+      query: _titleCtrl.text.trim(),
+      token: token,
+    );
+    if (!mounted) return;
+    setState(() => _backgroundBusy = false);
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有找到可用的 Bangumi 图片候选')));
+      return;
+    }
+    final chosen = await showDialog<BangumiImageCandidate>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('选择 Bangumi 背景'),
+        children: candidates
+            .map(
+              (candidate) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, candidate),
+                child: Row(
+                  children: [
+                    Image.network(
+                      candidate.imageUrl,
+                      width: 48,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      cacheWidth: 96,
+                      cacheHeight: 128,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        candidate.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() => _backgroundBusy = true);
+    final cached = await _backgroundCache.download(chosen.imageUrl);
+    if (!mounted) return;
+    if (cached == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('图片下载失败或格式不受支持')));
+    } else {
+      await ref
+          .read(gameRepoProvider)
+          .update(
+            widget.game.id,
+            GamesCompanion(backgroundPath: Value(cached)),
+          );
+      setState(() => _backgroundPath = cached);
+    }
+    if (mounted) setState(() => _backgroundBusy = false);
   }
 
   Future<void> _save() async {
@@ -51,9 +172,71 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
         launchArgs: Value(_argsCtrl.text.trim()),
         useLocaleEmulator: Value(_useLe),
         leProfile: Value(_profileCtrl.text.trim()),
+        backgroundPath: Value(_backgroundPath),
       ),
     );
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Widget _backgroundSection() {
+    final path = _backgroundPath;
+    final hasBackground = path != null && File(path).existsSync();
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHover,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 120,
+            height: 58,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(6)),
+            child: hasBackground
+                ? Image.file(
+                    File(path),
+                    fit: BoxFit.cover,
+                    cacheWidth: 240,
+                    cacheHeight: 116,
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _backgroundBusy ? null : _chooseLocalBackground,
+                  icon: const Icon(Icons.photo_library_outlined, size: 16),
+                  label: const Text('本地图片'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _backgroundBusy ? null : _searchBangumi,
+                  icon: const Icon(Icons.travel_explore_rounded, size: 16),
+                  label: const Text('BGM 搜索'),
+                ),
+                if (hasBackground)
+                  TextButton.icon(
+                    onPressed: _backgroundBusy ? null : _clearBackground,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('清除'),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -166,6 +349,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                   ),
                 ),
               const SizedBox(height: 8),
+              _backgroundSection(),
+              const SizedBox(height: 10),
               const Text(
                 '游玩历史记录',
                 style: TextStyle(

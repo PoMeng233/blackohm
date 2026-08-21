@@ -36,6 +36,9 @@ class Games extends Table {
   /// PE 提取的图标（PNG 字节，惰性生成，可为空）。
   BlobColumn get iconPng => blob().nullable()();
 
+  /// 背景图的本地缓存路径；不把大图写入 SQLite。
+  TextColumn get backgroundPath => text().nullable()();
+
   /// 附加启动参数。
   TextColumn get launchArgs => text().withDefault(const Constant(''))();
 
@@ -94,11 +97,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(games, games.backgroundPath);
+      }
+    },
     beforeOpen: (details) async {
       // WAL 模式：写入低延迟；外键级联生效。
       await customStatement('PRAGMA journal_mode=WAL;');

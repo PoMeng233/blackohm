@@ -109,6 +109,7 @@ class AppSettingsState {
     startHidden: startHidden ?? this.startHidden,
     closeToTray: closeToTray ?? this.closeToTray,
     trackingPaused: trackingPaused ?? this.trackingPaused,
+    bangumiToken: bangumiToken ?? this.bangumiToken,
   );
 }
 

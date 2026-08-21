@@ -68,6 +68,17 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     type: DriftSqlType.blob,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _backgroundPathMeta = const VerificationMeta(
+    'backgroundPath',
+  );
+  @override
+  late final GeneratedColumn<String> backgroundPath = GeneratedColumn<String>(
+    'background_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _launchArgsMeta = const VerificationMeta(
     'launchArgs',
   );
@@ -164,6 +175,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     exePath,
     dirPath,
     iconPng,
+    backgroundPath,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -215,6 +227,15 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
       context.handle(
         _iconPngMeta,
         iconPng.isAcceptableOrUnknown(data['icon_png']!, _iconPngMeta),
+      );
+    }
+    if (data.containsKey('background_path')) {
+      context.handle(
+        _backgroundPathMeta,
+        backgroundPath.isAcceptableOrUnknown(
+          data['background_path']!,
+          _backgroundPathMeta,
+        ),
       );
     }
     if (data.containsKey('launch_args')) {
@@ -297,6 +318,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.blob,
         data['${effectivePrefix}icon_png'],
       ),
+      backgroundPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}background_path'],
+      ),
       launchArgs: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}launch_args'],
@@ -349,6 +374,9 @@ class Game extends DataClass implements Insertable<Game> {
   /// PE 提取的图标（PNG 字节，惰性生成，可为空）。
   final Uint8List? iconPng;
 
+  /// 背景图的本地缓存路径；不把大图写入 SQLite。
+  final String? backgroundPath;
+
   /// 附加启动参数。
   final String launchArgs;
 
@@ -371,6 +399,7 @@ class Game extends DataClass implements Insertable<Game> {
     required this.exePath,
     required this.dirPath,
     this.iconPng,
+    this.backgroundPath,
     required this.launchArgs,
     required this.useLocaleEmulator,
     required this.leProfile,
@@ -388,6 +417,9 @@ class Game extends DataClass implements Insertable<Game> {
     map['dir_path'] = Variable<String>(dirPath);
     if (!nullToAbsent || iconPng != null) {
       map['icon_png'] = Variable<Uint8List>(iconPng);
+    }
+    if (!nullToAbsent || backgroundPath != null) {
+      map['background_path'] = Variable<String>(backgroundPath);
     }
     map['launch_args'] = Variable<String>(launchArgs);
     map['use_locale_emulator'] = Variable<bool>(useLocaleEmulator);
@@ -410,6 +442,9 @@ class Game extends DataClass implements Insertable<Game> {
       iconPng: iconPng == null && nullToAbsent
           ? const Value.absent()
           : Value(iconPng),
+      backgroundPath: backgroundPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backgroundPath),
       launchArgs: Value(launchArgs),
       useLocaleEmulator: Value(useLocaleEmulator),
       leProfile: Value(leProfile),
@@ -433,6 +468,7 @@ class Game extends DataClass implements Insertable<Game> {
       exePath: serializer.fromJson<String>(json['exePath']),
       dirPath: serializer.fromJson<String>(json['dirPath']),
       iconPng: serializer.fromJson<Uint8List?>(json['iconPng']),
+      backgroundPath: serializer.fromJson<String?>(json['backgroundPath']),
       launchArgs: serializer.fromJson<String>(json['launchArgs']),
       useLocaleEmulator: serializer.fromJson<bool>(json['useLocaleEmulator']),
       leProfile: serializer.fromJson<String>(json['leProfile']),
@@ -451,6 +487,7 @@ class Game extends DataClass implements Insertable<Game> {
       'exePath': serializer.toJson<String>(exePath),
       'dirPath': serializer.toJson<String>(dirPath),
       'iconPng': serializer.toJson<Uint8List?>(iconPng),
+      'backgroundPath': serializer.toJson<String?>(backgroundPath),
       'launchArgs': serializer.toJson<String>(launchArgs),
       'useLocaleEmulator': serializer.toJson<bool>(useLocaleEmulator),
       'leProfile': serializer.toJson<String>(leProfile),
@@ -467,6 +504,7 @@ class Game extends DataClass implements Insertable<Game> {
     String? exePath,
     String? dirPath,
     Value<Uint8List?> iconPng = const Value.absent(),
+    Value<String?> backgroundPath = const Value.absent(),
     String? launchArgs,
     bool? useLocaleEmulator,
     String? leProfile,
@@ -480,6 +518,9 @@ class Game extends DataClass implements Insertable<Game> {
     exePath: exePath ?? this.exePath,
     dirPath: dirPath ?? this.dirPath,
     iconPng: iconPng.present ? iconPng.value : this.iconPng,
+    backgroundPath: backgroundPath.present
+        ? backgroundPath.value
+        : this.backgroundPath,
     launchArgs: launchArgs ?? this.launchArgs,
     useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
     leProfile: leProfile ?? this.leProfile,
@@ -495,6 +536,9 @@ class Game extends DataClass implements Insertable<Game> {
       exePath: data.exePath.present ? data.exePath.value : this.exePath,
       dirPath: data.dirPath.present ? data.dirPath.value : this.dirPath,
       iconPng: data.iconPng.present ? data.iconPng.value : this.iconPng,
+      backgroundPath: data.backgroundPath.present
+          ? data.backgroundPath.value
+          : this.backgroundPath,
       launchArgs: data.launchArgs.present
           ? data.launchArgs.value
           : this.launchArgs,
@@ -521,6 +565,7 @@ class Game extends DataClass implements Insertable<Game> {
           ..write('exePath: $exePath, ')
           ..write('dirPath: $dirPath, ')
           ..write('iconPng: $iconPng, ')
+          ..write('backgroundPath: $backgroundPath, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
@@ -539,6 +584,7 @@ class Game extends DataClass implements Insertable<Game> {
     exePath,
     dirPath,
     $driftBlobEquality.hash(iconPng),
+    backgroundPath,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -556,6 +602,7 @@ class Game extends DataClass implements Insertable<Game> {
           other.exePath == this.exePath &&
           other.dirPath == this.dirPath &&
           $driftBlobEquality.equals(other.iconPng, this.iconPng) &&
+          other.backgroundPath == this.backgroundPath &&
           other.launchArgs == this.launchArgs &&
           other.useLocaleEmulator == this.useLocaleEmulator &&
           other.leProfile == this.leProfile &&
@@ -571,6 +618,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<String> exePath;
   final Value<String> dirPath;
   final Value<Uint8List?> iconPng;
+  final Value<String?> backgroundPath;
   final Value<String> launchArgs;
   final Value<bool> useLocaleEmulator;
   final Value<String> leProfile;
@@ -584,6 +632,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.exePath = const Value.absent(),
     this.dirPath = const Value.absent(),
     this.iconPng = const Value.absent(),
+    this.backgroundPath = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -598,6 +647,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     required String exePath,
     required String dirPath,
     this.iconPng = const Value.absent(),
+    this.backgroundPath = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -614,6 +664,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<String>? exePath,
     Expression<String>? dirPath,
     Expression<Uint8List>? iconPng,
+    Expression<String>? backgroundPath,
     Expression<String>? launchArgs,
     Expression<bool>? useLocaleEmulator,
     Expression<String>? leProfile,
@@ -628,6 +679,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (exePath != null) 'exe_path': exePath,
       if (dirPath != null) 'dir_path': dirPath,
       if (iconPng != null) 'icon_png': iconPng,
+      if (backgroundPath != null) 'background_path': backgroundPath,
       if (launchArgs != null) 'launch_args': launchArgs,
       if (useLocaleEmulator != null) 'use_locale_emulator': useLocaleEmulator,
       if (leProfile != null) 'le_profile': leProfile,
@@ -644,6 +696,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<String>? exePath,
     Value<String>? dirPath,
     Value<Uint8List?>? iconPng,
+    Value<String?>? backgroundPath,
     Value<String>? launchArgs,
     Value<bool>? useLocaleEmulator,
     Value<String>? leProfile,
@@ -658,6 +711,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       exePath: exePath ?? this.exePath,
       dirPath: dirPath ?? this.dirPath,
       iconPng: iconPng ?? this.iconPng,
+      backgroundPath: backgroundPath ?? this.backgroundPath,
       launchArgs: launchArgs ?? this.launchArgs,
       useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
       leProfile: leProfile ?? this.leProfile,
@@ -685,6 +739,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     }
     if (iconPng.present) {
       map['icon_png'] = Variable<Uint8List>(iconPng.value);
+    }
+    if (backgroundPath.present) {
+      map['background_path'] = Variable<String>(backgroundPath.value);
     }
     if (launchArgs.present) {
       map['launch_args'] = Variable<String>(launchArgs.value);
@@ -718,6 +775,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
           ..write('exePath: $exePath, ')
           ..write('dirPath: $dirPath, ')
           ..write('iconPng: $iconPng, ')
+          ..write('backgroundPath: $backgroundPath, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
@@ -1325,6 +1383,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       required String exePath,
       required String dirPath,
       Value<Uint8List?> iconPng,
+      Value<String?> backgroundPath,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -1340,6 +1399,7 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<String> exePath,
       Value<String> dirPath,
       Value<Uint8List?> iconPng,
+      Value<String?> backgroundPath,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -1402,6 +1462,11 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
 
   ColumnFilters<Uint8List> get iconPng => $composableBuilder(
     column: $table.iconPng,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backgroundPath => $composableBuilder(
+    column: $table.backgroundPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1500,6 +1565,11 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get backgroundPath => $composableBuilder(
+    column: $table.backgroundPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
     builder: (column) => ColumnOrderings(column),
@@ -1559,6 +1629,11 @@ class $$GamesTableAnnotationComposer
 
   GeneratedColumn<Uint8List> get iconPng =>
       $composableBuilder(column: $table.iconPng, builder: (column) => column);
+
+  GeneratedColumn<String> get backgroundPath => $composableBuilder(
+    column: $table.backgroundPath,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
@@ -1648,6 +1723,7 @@ class $$GamesTableTableManager
                 Value<String> exePath = const Value.absent(),
                 Value<String> dirPath = const Value.absent(),
                 Value<Uint8List?> iconPng = const Value.absent(),
+                Value<String?> backgroundPath = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -1661,6 +1737,7 @@ class $$GamesTableTableManager
                 exePath: exePath,
                 dirPath: dirPath,
                 iconPng: iconPng,
+                backgroundPath: backgroundPath,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,
@@ -1676,6 +1753,7 @@ class $$GamesTableTableManager
                 required String exePath,
                 required String dirPath,
                 Value<Uint8List?> iconPng = const Value.absent(),
+                Value<String?> backgroundPath = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -1689,6 +1767,7 @@ class $$GamesTableTableManager
                 exePath: exePath,
                 dirPath: dirPath,
                 iconPng: iconPng,
+                backgroundPath: backgroundPath,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,

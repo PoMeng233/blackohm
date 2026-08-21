@@ -1,6 +1,8 @@
 /// 游戏卡片组件：支持封面/图标展示、前台活跃呼吸光效、实时秒表与右键菜单。
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
@@ -85,6 +87,11 @@ class _GameCardState extends State<GameCard>
 
   @override
   Widget build(BuildContext context) {
+    final backgroundPath = widget.game.backgroundPath;
+    final backgroundFile = backgroundPath == null || backgroundPath.isEmpty
+        ? null
+        : File(backgroundPath);
+    final hasBackground = backgroundFile != null;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -108,6 +115,7 @@ class _GameCardState extends State<GameCard>
               ),
             ),
             Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: _hovering ? AppColors.surfaceHover : AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
@@ -131,150 +139,182 @@ class _GameCardState extends State<GameCard>
                       ]
                     : null,
               ),
-              child: Padding(
-
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Center(
-                child: widget.game.iconPng != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          widget.game.iconPng!,
-                          width: 64,
-                          height: 64,
-                          cacheWidth: 96,
-                          cacheHeight: 96,
-                          fit: BoxFit.contain,
-                        ),
-                      )
-                    : Container(
-                        width: 64,
-                        height: 64,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasBackground)
+                    Positioned.fill(
+                      child: Image.file(
+                        backgroundFile,
+                        fit: BoxFit.cover,
+                        cacheWidth: 360,
+                        cacheHeight: 380,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  if (hasBackground)
+                    const Positioned.fill(
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceActive,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.videogame_asset,
-                          color: AppColors.textMuted,
-                          size: 32,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Color(0xE60D0F12)],
+                          ),
                         ),
                       ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.game.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                if (_isActive) ...[
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
                     ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    formatStopwatch(widget.activeState.elapsedMs),
-                    style: const TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ] else ...[
-                  const Icon(
-                    Icons.schedule,
-                    size: 12,
-                    color: AppColors.textMuted,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      formatPlayDuration(widget.game.totalPlaySeconds),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: widget.game.iconPng != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.memory(
+                                      widget.game.iconPng!,
+                                      width: 64,
+                                      height: 64,
+                                      cacheWidth: 96,
+                                      cacheHeight: 96,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  )
+                                : Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceActive,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.videogame_asset,
+                                      color: AppColors.textMuted,
+                                      size: 32,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.game.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            if (_isActive) ...[
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                formatStopwatch(widget.activeState.elapsedMs),
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  fontFeatures: [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                            ] else ...[
+                              const Icon(
+                                Icons.schedule,
+                                size: 12,
+                                color: AppColors.textMuted,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  formatPlayDuration(
+                                    widget.game.totalPlaySeconds,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (widget.game.useLocaleEmulator)
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.leBadge.withAlpha(40),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: const Text(
+                                  'LE',
+                                  style: TextStyle(
+                                    color: AppColors.leBadge,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            if (widget.game.favorite)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.star,
+                                  color: Colors.amber,
+                                  size: 13,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              tooltip: '运行文件',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: AppColors.accent,
+                                size: 18,
+                              ),
+                              onPressed: widget.onLaunch,
+                            ),
+                            IconButton(
+                              tooltip: '打开游戏目录',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                Icons.folder_open_rounded,
+                                color: AppColors.textSecondary,
+                                size: 17,
+                              ),
+                              onPressed: widget.onOpenDirectory,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
-                if (widget.game.useLocaleEmulator)
-                  Container(
-                    margin: const EdgeInsets.only(left: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.leBadge.withAlpha(40),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: const Text(
-                      'LE',
-                      style: TextStyle(
-                        color: AppColors.leBadge,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                if (widget.game.favorite)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4),
-                    child: Icon(Icons.star, color: Colors.amber, size: 13),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  tooltip: '运行文件',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: AppColors.accent,
-                    size: 18,
-                  ),
-                  onPressed: widget.onLaunch,
-                ),
-                IconButton(
-                  tooltip: '打开游戏目录',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.folder_open_rounded,
-                    color: AppColors.textSecondary,
-                    size: 17,
-                  ),
-                  onPressed: widget.onOpenDirectory,
-                ),
-              ],
-            ),
-          ],
-        ),
               ),
             ),
           ],
