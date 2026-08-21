@@ -1,0 +1,50 @@
+name: blackohm
+description: "BlackOhm — 超轻量 Windows 视觉小说资产管理与前台焦点游玩记录器"
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── 状态管理：响应式数据流解耦 ──────────────────────────────
+  flutter_riverpod: ^2.6.1
+
+  # ── 本地存储：SQLite 3 (FFI) + 后台 isolate 数据库连接 ──────
+  drift: ^2.28.0
+  sqlite3_flutter_libs: ^0.5.32
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # ── Windows 系统级交互（手写 FFI 绑定，ffi 提供 NativeCallable）──
+  ffi: ^2.1.4
+
+  # ── 窗口生命周期与系统托盘 ──────────────────────────────────
+  window_manager: ^0.5.1
+  tray_manager: ^0.5.3
+
+  # ── 拖拽捕获 ────────────────────────────────────────────────
+  desktop_drop: ^0.6.0
+
+  # ── 设置页文件/目录选择 ─────────────────────────────────────
+  file_picker: ^11.0.0
+
+  collection: ^1.19.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # ── Drift 代码生成 ──────────────────────────────────────────
+  build_runner: ^2.7.1
+  drift_dev: ^2.28.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/tray.ico
