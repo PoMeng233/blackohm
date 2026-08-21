@@ -7,11 +7,7 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 
 class DropOverlay extends StatefulWidget {
-  const DropOverlay({
-    required this.child,
-    required this.onDropped,
-    super.key,
-  });
+  const DropOverlay({required this.child, required this.onDropped, super.key});
 
   final Widget child;
   final ValueChanged<List<String>> onDropped;
@@ -44,15 +40,14 @@ class _DropOverlayState extends State<DropOverlay> {
                   decoration: BoxDecoration(
                     color: AppColors.accent.withAlpha(20),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppColors.accent,
-                      width: 2,
-                    ),
+                    border: Border.all(color: AppColors.accent, width: 2),
                   ),
                   child: Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceActive,
                         borderRadius: BorderRadius.circular(12),
@@ -68,8 +63,11 @@ class _DropOverlayState extends State<DropOverlay> {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.drive_folder_upload,
-                              color: AppColors.accent, size: 28),
+                          Icon(
+                            Icons.drive_folder_upload,
+                            color: AppColors.accent,
+                            size: 28,
+                          ),
                           SizedBox(width: 12),
                           Text(
                             '释放以扫描并加入游戏库',

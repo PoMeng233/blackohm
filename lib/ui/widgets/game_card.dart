@@ -3,9 +3,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../core/database/app_database.dart';
-import '../features/tracking/tracking_engine.dart';
-import 'theme.dart';
+import '../../core/database/app_database.dart';
+import '../../features/tracking/tracking_engine.dart';
+import '../theme.dart';
 
 class GameCard extends StatefulWidget {
   const GameCard({
@@ -94,7 +94,9 @@ class _GameCardState extends State<GameCard>
                 boxShadow: _isActive
                     ? [
                         BoxShadow(
-                          color: AppColors.accent.withValues(alpha: glowOpacity),
+                          color: AppColors.accent.withValues(
+                            alpha: glowOpacity,
+                          ),
                           blurRadius: 18,
                           spreadRadius: 2,
                         ),
@@ -130,8 +132,11 @@ class _GameCardState extends State<GameCard>
                           color: AppColors.surfaceActive,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.videogame_asset,
-                            color: AppColors.textMuted, size: 32),
+                        child: const Icon(
+                          Icons.videogame_asset,
+                          color: AppColors.textMuted,
+                          size: 32,
+                        ),
                       ),
               ),
             ),
@@ -186,8 +191,10 @@ class _GameCardState extends State<GameCard>
                 if (widget.game.useLocaleEmulator)
                   Container(
                     margin: const EdgeInsets.only(left: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.leBadge.withAlpha(40),
                       borderRadius: BorderRadius.circular(3),
@@ -219,7 +226,11 @@ class _GameCardState extends State<GameCard>
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-          offset.dx, offset.dy, offset.dx + 1, offset.dy + 1),
+        offset.dx,
+        offset.dy,
+        offset.dx + 1,
+        offset.dy + 1,
+      ),
       color: AppColors.surfaceActive,
       items: [
         PopupMenuItem(
@@ -236,8 +247,10 @@ class _GameCardState extends State<GameCard>
           value: 'fav',
           child: Row(
             children: [
-              Icon(widget.game.favorite ? Icons.star_border : Icons.star,
-                  size: 18),
+              Icon(
+                widget.game.favorite ? Icons.star_border : Icons.star,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(widget.game.favorite ? '取消收藏' : '加入收藏'),
             ],
@@ -248,7 +261,7 @@ class _GameCardState extends State<GameCard>
           child: Row(
             children: [
               Icon(Icons.info_outline, size: 18),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text('游戏详情与历史'),
             ],
           ),
@@ -259,7 +272,7 @@ class _GameCardState extends State<GameCard>
           child: Row(
             children: [
               Icon(Icons.delete_outline, color: AppColors.error, size: 18),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text('从库中移除', style: TextStyle(color: AppColors.error)),
             ],
           ),

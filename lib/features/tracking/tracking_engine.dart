@@ -31,8 +31,11 @@ class TrackingPublicState {
     required this.phase,
   });
 
-  static const TrackingPublicState idle =
-      TrackingPublicState(gameId: 0, elapsedMs: 0, phase: TrackingPhase.idle);
+  static const TrackingPublicState idle = TrackingPublicState(
+    gameId: 0,
+    elapsedMs: 0,
+    phase: TrackingPhase.idle,
+  );
 
   final int gameId;
   final int elapsedMs;
@@ -44,17 +47,16 @@ class TrackingPublicState {
 enum TrackingPhase { idle, live, grace }
 
 class _ActiveSession {
-  _ActiveSession({required this.gameId, this.sessionId = 0});
+  _ActiveSession({required this.gameId});
 
   final int gameId;
-  int sessionId; // INSERT 异步回填，0 = 尚未落库
+  int sessionId = 0; // INSERT 异步回填，0 = 尚未落库
   int accumulatedMs = 0;
   DateTime? graceSince; // null = live
 }
 
 class TrackingEngine {
-  TrackingEngine({required SessionRepository sessions})
-      : _sessions = sessions;
+  TrackingEngine({required this._sessions});
 
   final SessionRepository _sessions;
 
@@ -159,8 +161,9 @@ class TrackingEngine {
   }
 
   void _onSnapshot(ForegroundSnapshot s) {
-    final gameId =
-        (s.visible && s.imagePath != null) ? _exeIndex[s.imagePath!] : null;
+    final gameId = (s.visible && s.imagePath != null)
+        ? _exeIndex[s.imagePath!]
+        : null;
     if (gameId == null) {
       _enterGraceIfNeeded();
       return;

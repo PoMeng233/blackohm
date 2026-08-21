@@ -12,6 +12,7 @@ import '../features/scanner/ingestion_service.dart';
 import '../features/tray/tray_service.dart';
 import '../providers.dart';
 import 'drop_zone.dart';
+import 'pages/insights_page.dart';
 import 'pages/library_page.dart';
 import 'pages/settings_page.dart';
 import 'theme.dart';
@@ -65,8 +66,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     // 监听最近游玩列表变化更新托盘菜单
     ref.listenManual(recentGamesProvider, (_, next) {
       final list = next.value ?? const [];
-      tray.updateRecent(
-          list.map((g) => (id: g.id, title: g.title)).toList());
+      tray.updateRecent(list.map((g) => (id: g.id, title: g.title)).toList());
     }, fireImmediately: true);
 
     // 监听暂停开关更新托盘复选框
@@ -100,20 +100,24 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
 
     final messenger = ScaffoldMessenger.of(context);
     if (report.added.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('已录入 ${report.added.length} 款游戏：${report.added.join('、')}'),
-        backgroundColor: AppColors.accent,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '已录入 ${report.added.length} 款游戏：${report.added.join('、')}',
+          ),
+          backgroundColor: AppColors.accent,
+        ),
+      );
     }
     if (report.duplicatePaths.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('${report.duplicatePaths.length} 个路径已在库中，已跳过'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text('${report.duplicatePaths.length} 个路径已在库中，已跳过')),
+      );
     }
     if (report.noExePaths.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('未在 ${report.noExePaths.length} 个目录中找到有效程序'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text('未在 ${report.noExePaths.length} 个目录中找到有效程序')),
+      );
     }
     for (final candidates in report.pendingDecisions) {
       if (!mounted) break;
@@ -125,10 +129,12 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
           onSelected: (chosen) async {
             await svc.addChosen(chosen, report);
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('已录入：${chosen.description ?? chosen.path}'),
-                backgroundColor: AppColors.accent,
-              ));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('已录入：${chosen.description ?? chosen.path}'),
+                  backgroundColor: AppColors.accent,
+                ),
+              );
             }
           },
         ),
@@ -163,8 +169,11 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                       border: Border.all(color: AppColors.accent),
                     ),
                     child: const Center(
-                      child: Icon(Icons.bolt,
-                          color: AppColors.accent, size: 22),
+                      child: Icon(
+                        Icons.bolt,
+                        color: AppColors.accent,
+                        size: 22,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -175,17 +184,19 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                   ),
                   const SizedBox(height: 8),
                   _navButton(
-                    icon: Icons.tune_rounded,
-                    label: '设置',
+                    icon: Icons.query_stats_rounded,
+                    label: '时长',
                     index: 1,
                   ),
+                  const SizedBox(height: 8),
+                  _navButton(icon: Icons.tune_rounded, label: '设置', index: 2),
                   const Spacer(),
                   // 底部状态小绿点（引擎常驻守护）
                   Consumer(
-                    builder: (_, ref, __) {
+                    builder: (_, ref, _) {
                       final active =
                           ref.watch(trackingStateProvider).value?.isActive ??
-                              false;
+                          false;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Tooltip(
@@ -220,10 +231,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
             Expanded(
               child: IndexedStack(
                 index: _navIndex,
-                children: const [
-                  LibraryPage(),
-                  SettingsPage(),
-                ],
+                children: const [LibraryPage(), InsightsPage(), SettingsPage()],
               ),
             ),
           ],

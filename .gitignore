@@ -45,9 +45,7 @@ app.*.map.json
 /android/app/release
 
 # ── BlackOhm 项目专属 ────────────────────────────────────────
-# Drift 代码生成产物不入库（flutter pub run build_runner build 可重建）
-lib/core/database/app_database.g.dart
-
+# Drift 生成绑定文件会提交到版本控制，确保克隆后可直接构建。
 # 运行期数据库产物
 *.db
 *.db-journal

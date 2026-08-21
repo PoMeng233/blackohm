@@ -7,10 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../features/launcher/launch_service.dart';
-import '../../features/scanner/ingestion_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
-import '../widgets/exe_decision_dialog.dart';
 import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 
@@ -43,50 +41,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     super.dispose();
   }
 
-  Future<void> _handleIngestReport(IngestReport report) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (report.added.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('已录入 ${report.added.length} 款游戏：${report.added.join(', ')}'),
-        backgroundColor: AppColors.accent,
-      ));
-    }
-    if (report.duplicatePaths.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('${report.duplicatePaths.length} 个路径已在库中，已自动跳过'),
-      ));
-    }
-    if (report.noExePaths.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('未在 ${report.noExePaths.length} 个目录中发现有效游戏程序'),
-      ));
-    }
-    for (final candidates in report.pendingDecisions) {
-      if (!mounted) break;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => ExeDecisionDialog(
-          candidates: candidates,
-          onSelected: (chosen) async {
-            final svc = IngestionService(ref.read(gameRepoProvider));
-            await svc.addChosen(chosen, report);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('已录入：${chosen.description ?? chosen.path}'),
-                backgroundColor: AppColors.accent,
-              ));
-            }
-          },
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gameListProvider);
-    final activeState = ref.watch(trackingStateProvider).value ??
+    final activeState =
+        ref.watch(trackingStateProvider).value ??
         ref.watch(trackingEngineProvider).current;
     final launcher = LaunchService();
 
@@ -104,8 +63,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: '搜索游戏名称或路径...',
-                      prefixIcon:
-                          const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 18,
+                        color: AppColors.textMuted,
+                      ),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 16),
@@ -121,7 +83,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 tooltip: _onlyFavorites ? '显示全部' : '仅看收藏',
                 icon: Icon(
                   _onlyFavorites ? Icons.star : Icons.star_border,
-                  color: _onlyFavorites ? Colors.amber : AppColors.textSecondary,
+                  color: _onlyFavorites
+                      ? Colors.amber
+                      : AppColors.textSecondary,
                 ),
                 onPressed: () =>
                     setState(() => _onlyFavorites = !_onlyFavorites),
@@ -139,11 +103,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ),
                 ],
                 selected: {_viewMode},
-                onSelectionChanged: (s) =>
-                    setState(() => _viewMode = s.first),
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                ),
+                onSelectionChanged: (s) => setState(() => _viewMode = s.first),
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
               ),
             ],
           ),
@@ -153,8 +114,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           child: gamesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
-                child: Text('加载失败：$e',
-                    style: const TextStyle(color: AppColors.error))),
+              child: Text(
+                '加载失败：$e',
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
             data: (games) {
               var filtered = games.where((g) {
                 if (_onlyFavorites && !g.favorite) return false;
@@ -176,15 +140,20 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.auto_stories,
-                          size: 56, color: AppColors.textMuted),
+                      const Icon(
+                        Icons.auto_stories,
+                        size: 56,
+                        color: AppColors.textMuted,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         _searchQuery.isNotEmpty
                             ? '未找到匹配的游戏'
                             : '游戏库为空，请将游戏目录或 exe 拖入此处',
                         style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 14),
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -194,9 +163,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               if (_viewMode == LibraryViewMode.grid) {
                 return GridView.builder(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 8),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 180,
                     mainAxisExtent: 160,
                     crossAxisSpacing: 14,
@@ -217,12 +187,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           context: context,
                           builder: (_) => GameDetailDialog(game: g),
                         ),
-                        onDelete: () =>
-                            ref.read(gameRepoProvider).delete(g.id),
+                        onDelete: () => ref.read(gameRepoProvider).delete(g.id),
                         onToggleFavorite: () => ref
                             .read(gameRepoProvider)
-                            .update(g.id,
-                                GamesCompanion(favorite: Value(!g.favorite))),
+                            .update(
+                              g.id,
+                              GamesCompanion(favorite: Value(!g.favorite)),
+                            ),
                       ),
                     );
                   },
@@ -232,14 +203,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               // 列表视图
               return ListView.separated(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 8),
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 itemCount: filtered.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: 6),
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (context, i) {
                   final g = filtered[i];
-                  final isCardActive = activeState.isActive &&
-                      activeState.gameId == g.id;
+                  final isCardActive =
+                      activeState.isActive && activeState.gameId == g.id;
                   return Material(
                     color: isCardActive
                         ? AppColors.surfaceActive
@@ -253,23 +225,30 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                         child: Row(
                           children: [
                             if (g.iconPng != null)
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
-                                child: Image.memory(g.iconPng!,
-                                    width: 28, height: 28),
+                                child: Image.memory(
+                                  g.iconPng!,
+                                  width: 28,
+                                  height: 28,
+                                ),
                               )
                             else
-                              const Icon(Icons.videogame_asset,
-                                  size: 24, color: AppColors.textMuted),
+                              const Icon(
+                                Icons.videogame_asset,
+                                size: 24,
+                                color: AppColors.textMuted,
+                              ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     g.title,
@@ -318,8 +297,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               ),
                             const SizedBox(width: 12),
                             IconButton(
-                              icon: const Icon(Icons.play_arrow,
-                                  color: AppColors.accent, size: 20),
+                              icon: const Icon(
+                                Icons.play_arrow,
+                                color: AppColors.accent,
+                                size: 20,
+                              ),
                               onPressed: () {
                                 final settings = ref.read(settingsProvider);
                                 launcher.launch(g, settings);

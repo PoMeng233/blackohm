@@ -40,7 +40,8 @@ class Games extends Table {
   TextColumn get launchArgs => text().withDefault(const Constant(''))();
 
   /// 是否经 Locale Emulator 代理启动。
-  BoolColumn get useLocaleEmulator => boolean().withDefault(const Constant(false))();
+  BoolColumn get useLocaleEmulator =>
+      boolean().withDefault(const Constant(false))();
 
   /// LE Profile 名 / GUID（留空 = LEProc 默认行为）。
   TextColumn get leProfile => text().withDefault(const Constant(''))();
@@ -54,11 +55,6 @@ class Games extends Table {
 
   /// 收藏标记。
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
-
-  @override
-  List<Set<Column>> get uniqueKeys => [
-        {exePath}
-      ];
 }
 
 /// 连续游玩会话：一次"获得焦点 → 失焦超过 3s"的完整区间，
@@ -77,7 +73,9 @@ class PlaySessions extends Table {
   IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
 
   @override
-  List<String> get customConstraints => ['FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE'];
+  List<String> get customConstraints => [
+    'FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE',
+  ];
 }
 
 /// 轻量 KV 设置表。
@@ -100,13 +98,13 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
-        beforeOpen: (details) async {
-          // WAL 模式：写入低延迟；外键级联生效。
-          await customStatement('PRAGMA journal_mode=WAL;');
-          await customStatement('PRAGMA foreign_keys=ON;');
-        },
-      );
+    onCreate: (m) => m.createAll(),
+    beforeOpen: (details) async {
+      // WAL 模式：写入低延迟；外键级联生效。
+      await customStatement('PRAGMA journal_mode=WAL;');
+      await customStatement('PRAGMA foreign_keys=ON;');
+    },
+  );
 
   static LazyDatabase _open() {
     return LazyDatabase(() async {

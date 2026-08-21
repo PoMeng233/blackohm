@@ -1,0 +1,13 @@
+# Keep source and documentation line endings stable across Windows/macOS/Linux.
+*.dart text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.bat text eol=crlf
+*.ico binary
+*.png binary
+*.dll binary
+*.exe binary

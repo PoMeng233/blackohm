@@ -35,7 +35,7 @@ ThemeData buildDarkTheme() {
       error: AppColors.error,
     ),
     fontFamily: 'Segoe UI',
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: AppColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(

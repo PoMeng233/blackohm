@@ -1,7 +1,11 @@
 /// 系统托盘服务：快速启动最近游戏 / 暂停统计 / 显示主窗口 / 退出。
 library;
 
-import 'package:flutter/foundation.dart';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 class TrayService with TrayListener {
@@ -26,9 +30,23 @@ class TrayService with TrayListener {
     _started = true;
     _paused = paused;
     trayManager.addListener(this);
-    await trayManager.setIcon('assets/tray.ico');
+    await trayManager.setIcon(await _materializeTrayIcon());
     await trayManager.setToolTip('BlackOhm · 前台焦点记录器');
     await _rebuild();
+  }
+
+  /// tray_manager 需要磁盘路径；Flutter asset 在 Release 包内不是可直接访问的文件。
+  /// 首次启动时将 ICO 写入应用支持目录，之后复用同一文件。
+  Future<String> _materializeTrayIcon() async {
+    final dir = await getApplicationSupportDirectory();
+    final icon = File(p.join(dir.path, 'tray.ico'));
+    if (!await icon.exists()) {
+      final asset = await rootBundle.load('assets/tray.ico');
+      await icon.writeAsBytes(
+        asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes),
+      );
+    }
+    return icon.path;
   }
 
   Future<void> updateRecent(List<({int id, String title})> recent) async {
@@ -59,7 +77,7 @@ class TrayService with TrayListener {
       MenuItem.separator(),
       MenuItem(key: 'quit', label: '退出 BlackOhm'),
     ];
-    await trayManager.setMenu(Menu(items: items));
+    await trayManager.setContextMenu(Menu(items: items));
   }
 
   Future<void> dispose() async {

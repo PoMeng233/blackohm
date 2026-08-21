@@ -19,23 +19,49 @@ import '../../data/game_repository.dart';
 import 'directory_scanner.dart';
 import 'pe_info.dart';
 
-/// PE 富化结果（isolate 回传的纯数据）。
+/// 用于决策弹窗的完整候选元数据（isolate 回传的纯数据）。
 class EnrichedCandidate {
-  EnrichedCandidate(this.path, this.description, this.productName, this.icon);
+  const EnrichedCandidate({
+    required this.path,
+    required this.sizeBytes,
+    required this.modified,
+    this.description,
+    this.productName,
+    this.icon,
+  });
 
   final String path;
+  final int sizeBytes;
+  final DateTime modified;
   final String? description;
   final String? productName;
   final Uint8List? icon;
 }
 
+/// 一组扫描结果应走的入库分流路径。
+enum CandidateResolution { noCandidate, duplicateOnly, autoAdd, chooseMainExe }
+
+/// 仅以新候选与重复候选数量决定分流，便于独立测试 UI 决策触发条件。
+CandidateResolution resolveCandidateGroup({
+  required int availableCandidates,
+  required int duplicateCandidates,
+}) {
+  if (availableCandidates >= 2) return CandidateResolution.chooseMainExe;
+  if (availableCandidates == 1) return CandidateResolution.autoAdd;
+  if (duplicateCandidates > 0) return CandidateResolution.duplicateOnly;
+  return CandidateResolution.noCandidate;
+}
+
 class IngestReport {
   IngestReport({
-    this.added = const [],
-    this.duplicatePaths = const [],
-    this.pendingDecisions = const [],
-    this.noExePaths = const [],
-  });
+    List<String>? added,
+    List<String>? duplicatePaths,
+    List<List<EnrichedCandidate>>? pendingDecisions,
+    List<String>? noExePaths,
+  }) : added = added ?? <String>[],
+       duplicatePaths = duplicatePaths ?? <String>[],
+       pendingDecisions = pendingDecisions ?? <List<EnrichedCandidate>>[],
+       noExePaths = noExePaths ?? <String>[];
 
   /// 成功自动录入的游戏标题。
   final List<String> added;
@@ -72,38 +98,43 @@ class IngestionService {
 
     // 1) 扫描（独立 Isolate，含 stat）
     final groups = await Isolate.run(() {
-      final out = <List<String>>[];
-      for (final p in paths) {
-        final type = FileSystemEntity.typeSync(p, followLinks: true);
+      final out = <List<ExeCandidate>>[];
+      for (final path in paths) {
+        final type = FileSystemEntity.typeSync(path, followLinks: true);
         if (type == FileSystemEntityType.directory) {
-          final list = scanForGameExes(p)
-              .map((c) => c.path)
-              .toList(growable: false);
-          out.add(list);
+          out.add(scanForGameExes(path));
         } else if (type == FileSystemEntityType.file &&
-            p.toLowerCase().endsWith('.exe')) {
-          out.add([fileToCandidate(p).path]);
+            path.toLowerCase().endsWith('.exe')) {
+          out.add([fileToCandidate(path)]);
         } else {
-          out.add(const []);
+          out.add(<ExeCandidate>[]);
         }
       }
       return out;
     });
 
     // 2) 汇总去重 → 批量 PE 富化（单 Isolate 批处理，摊薄 isolate 启动成本）
-    final allPaths = <String>[];
-    for (final g in groups) {
-      allPaths.addAll(g);
+    final allCandidates = <ExeCandidate>[];
+    for (final group in groups) {
+      allCandidates.addAll(group);
     }
-    final deduped = allPaths
-        .map(normalizeExePath)
-        .toSet()
-        .where((p) => !existing.contains(p))
-        .toList();
+    // 去重只使用标准化路径作 key；保留原始文件路径及 stat 元数据，
+    // 让 PE 解析、弹窗体积和修改时间都来自同一个候选对象。
+    final uniqueCandidates = <String, ExeCandidate>{};
+    for (final candidate in allCandidates) {
+      uniqueCandidates.putIfAbsent(
+        normalizeExePath(candidate.path),
+        () => candidate,
+      );
+    }
+    final candidatesToEnrich = uniqueCandidates.entries
+        .where((entry) => !existing.contains(entry.key))
+        .map((entry) => entry.value)
+        .toList(growable: false);
 
-    final enriched = deduped.isEmpty
+    final enriched = candidatesToEnrich.isEmpty
         ? const <EnrichedCandidate>[]
-        : await _enrich(deduped);
+        : await _enrich(candidatesToEnrich);
 
     // 3) 分流
     final byNorm = <String, EnrichedCandidate>{};
@@ -112,23 +143,32 @@ class IngestionService {
     }
     var cursor = 0;
     for (final group in groups) {
-      final normGroup = group.map(normalizeExePath).toList();
+      final normGroup = group
+          .map((c) => normalizeExePath(c.path))
+          .toSet()
+          .toList(growable: false);
       if (normGroup.isEmpty) {
         report.noExePaths.add(paths[cursor]);
         cursor++;
         continue;
       }
-      final live =
-          normGroup.where((p) => byNorm.containsKey(p)).map((p) => byNorm[p]!).toList();
+      final live = normGroup
+          .where((p) => byNorm.containsKey(p))
+          .map((p) => byNorm[p]!)
+          .toList();
       final dups = normGroup.where((p) => existing.contains(p)).length;
-      if (live.length == 1) {
-        await _insertCandidate(live.first, report);
-      } else if (live.length >= 2) {
-        report.pendingDecisions.add(live);
-      } else if (dups > 0) {
-        report.duplicatePaths.add(paths[cursor]);
-      } else {
-        report.noExePaths.add(paths[cursor]);
+      switch (resolveCandidateGroup(
+        availableCandidates: live.length,
+        duplicateCandidates: dups,
+      )) {
+        case CandidateResolution.autoAdd:
+          await _insertCandidate(live.single, report);
+        case CandidateResolution.chooseMainExe:
+          report.pendingDecisions.add(live);
+        case CandidateResolution.duplicateOnly:
+          report.duplicatePaths.add(paths[cursor]);
+        case CandidateResolution.noCandidate:
+          report.noExePaths.add(paths[cursor]);
       }
       cursor++;
     }
@@ -140,7 +180,9 @@ class IngestionService {
       _insertCandidate(c, report);
 
   Future<void> _insertCandidate(
-      EnrichedCandidate c, IngestReport report) async {
+    EnrichedCandidate c,
+    IngestReport report,
+  ) async {
     // 符号链接解析 → 长路径 → 标准化（与运行期捕获同构）。
     String real;
     try {
@@ -154,39 +196,52 @@ class IngestionService {
       return;
     }
     final dirPath = File(c.path).parent.path;
-    final fallbackTitle =
-        dirPath.split(Platform.pathSeparator).last;
+    final fallbackTitle = dirPath.split(Platform.pathSeparator).last;
     final title = _pickTitle(c, fallbackTitle);
 
-    await _games.insert(GamesCompanion.insert(
-      title: title,
-      exePath: normalized,
-      dirPath: dirPath,
-      iconPng: c.icon == null ? const Value.absent() : Value(c.icon!),
-    ));
+    await _games.insert(
+      GamesCompanion.insert(
+        title: title,
+        exePath: normalized,
+        dirPath: dirPath,
+        iconPng: c.icon == null ? const Value.absent() : Value(c.icon!),
+      ),
+    );
     report.added.add(title);
   }
 
   String _pickTitle(EnrichedCandidate c, String fallback) {
+    // KiriKiri 等引擎的 FileDescription 是内核自述（"TVP(KIRIKIRI) 2 core…"），
+    // 不能当游戏名；逐级回退：描述 → 产品名 → exe 文件名 → 目录名。
     final d = c.description?.trim() ?? '';
-    if (d.isNotEmpty) return d;
+    if (!isBoilerplateTitle(d)) return d;
     final p = c.productName?.trim() ?? '';
-    if (p.isNotEmpty) return p;
-    return fallback.isEmpty ? c.path.split(Platform.pathSeparator).last : fallback;
+    if (!isBoilerplateTitle(p)) return p;
+
+    final fileName = c.path.split(Platform.pathSeparator).last;
+    final lower = fileName.toLowerCase();
+    final stem = lower.endsWith('.exe')
+        ? fileName.substring(0, fileName.length - 4)
+        : fileName;
+    if (!isBoilerplateTitle(stem)) return stem;
+
+    return fallback.isEmpty ? fileName : fallback;
   }
 
   /// 批量 PE 解析：文件 IO + 资源解析 + PNG 编码全部在一次性 isolate。
-  Future<List<EnrichedCandidate>> _enrich(List<String> paths) {
+  Future<List<EnrichedCandidate>> _enrich(List<ExeCandidate> candidates) {
     return Isolate.run(() {
       return [
-        for (final p in paths)
+        for (final candidate in candidates)
           () {
-            final info = parsePeFile(p);
+            final info = parsePeFile(candidate.path);
             return EnrichedCandidate(
-              p,
-              info?.fileDescription,
-              info?.productName,
-              info?.iconPng,
+              path: candidate.path,
+              sizeBytes: candidate.sizeBytes,
+              modified: candidate.modified,
+              description: info?.fileDescription,
+              productName: info?.productName,
+              icon: info?.iconPng,
             );
           }(),
       ];

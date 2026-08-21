@@ -1,7 +1,7 @@
 /// 游戏启动服务：直启 / Locale Emulator 代理启动。
 ///
 /// LE 调用流：
-///   LEProc.exe -run "<Target_Exe>" [args]
+///   LEProc.exe -run "&lt;Target_Exe&gt;" [args]
 /// 参数模板可配置（{exe} / {profile} / {args} 占位符），
 /// 以兼容 `-runas {profile} "{exe}"` 等 LEProc 形态。
 ///

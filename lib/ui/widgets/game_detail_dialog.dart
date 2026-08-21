@@ -57,8 +57,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final sessionsStream =
-        ref.watch(sessionRepoProvider).watchForGame(widget.game.id);
+    final sessionsStream = ref
+        .watch(sessionRepoProvider)
+        .watchForGame(widget.game.id);
 
     return Dialog(
       backgroundColor: AppColors.surface,
@@ -78,8 +79,11 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                   widget.game.iconPng != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(widget.game.iconPng!,
-                              width: 44, height: 44),
+                          child: Image.memory(
+                            widget.game.iconPng!,
+                            width: 44,
+                            height: 44,
+                          ),
                         )
                       : Container(
                           width: 44,
@@ -88,8 +92,10 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                             color: AppColors.surfaceActive,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.videogame_asset,
-                              color: AppColors.textMuted),
+                          child: const Icon(
+                            Icons.videogame_asset,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -139,8 +145,10 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                     activeColor: AppColors.leBadge,
                     onChanged: (v) => setState(() => _useLe = v ?? false),
                   ),
-                  const Text('使用 Locale Emulator 转区启动',
-                      style: TextStyle(color: AppColors.textPrimary)),
+                  const Text(
+                    '使用 Locale Emulator 转区启动',
+                    style: TextStyle(color: AppColors.textPrimary),
+                  ),
                 ],
               ),
               if (_useLe)
@@ -177,14 +185,18 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                       final list = snapshot.data ?? const [];
                       if (list.isEmpty) {
                         return const Center(
-                          child: Text('暂无游玩记录',
-                              style: TextStyle(
-                                  color: AppColors.textMuted, fontSize: 12)),
+                          child: Text(
+                            '暂无游玩记录',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
                         );
                       }
                       return ListView.separated(
                         itemCount: list.length,
-                        separatorBuilder: (_, __) =>
+                        separatorBuilder: (_, _) =>
                             const Divider(height: 1, color: AppColors.border),
                         itemBuilder: (_, i) {
                           final s = list[i];
@@ -192,13 +204,18 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                               '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')} ${s.startedAt.hour.toString().padLeft(2, '0')}:${s.startedAt.minute.toString().padLeft(2, '0')}';
                           return Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             child: Row(
                               children: [
-                                Text(dateStr,
-                                    style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12)),
+                                Text(
+                                  dateStr,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 const Spacer(),
                                 Text(
                                   formatPlayDuration(s.durationSeconds),
@@ -223,8 +240,10 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消',
-                        style: TextStyle(color: AppColors.textSecondary)),
+                    child: const Text(
+                      '取消',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -233,8 +252,10 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                       foregroundColor: AppColors.bgDark,
                     ),
                     onPressed: _save,
-                    child: const Text('保存修改',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      '保存修改',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),

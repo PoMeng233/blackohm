@@ -16,6 +16,20 @@ import 'dart:typed_data';
 
 import 'png_encoder.dart';
 
+/// 已知引擎/运行时的样板自述文本。这类 FileDescription 描述的是引擎内核
+/// 而非具体游戏（典型：KiriKiri 的 "TVP(KIRIKIRI) 2 core / Scripting
+/// Platform for Win32"），直接展示会掩盖真实游戏名。
+final RegExp kBoilerplateTitlePattern = RegExp(
+  r'kirikiri|krkr|\btvp\b|\bkag\b|rgss|rpg\s?maker|game\s?maker|unity',
+  caseSensitive: false,
+);
+
+/// 判断 [raw] 是否为空文本或引擎样板描述，不应作为游戏标题。
+bool isBoilerplateTitle(String? raw) {
+  final t = raw?.trim() ?? '';
+  return t.isEmpty || kBoilerplateTitlePattern.hasMatch(t);
+}
+
 class PeInfo {
   const PeInfo({
     this.fileDescription,
@@ -32,12 +46,11 @@ class PeInfo {
   final Uint8List? iconPng;
 
   /// 图标缺失时的兜底展示名。
-  String get bestTitle =>
-      fileDescription?.trim().isNotEmpty == true
-          ? fileDescription!.trim()
-          : productName?.trim().isNotEmpty == true
-              ? productName!.trim()
-              : '';
+  String get bestTitle {
+    if (!isBoilerplateTitle(fileDescription)) return fileDescription!.trim();
+    if (!isBoilerplateTitle(productName)) return productName!.trim();
+    return '';
+  }
 }
 
 /// 解析失败返回 null（非 PE 文件 / 损坏 / 权限不足）。
@@ -52,8 +65,12 @@ PeInfo? parsePeFile(String exePath) {
 }
 
 class _Section {
-  const _Section(this.virtualAddress, this.virtualSize, this.rawSize,
-      this.rawPointer);
+  const _Section(
+    this.virtualAddress,
+    this.virtualSize,
+    this.rawSize,
+    this.rawPointer,
+  );
   final int virtualAddress;
   final int virtualSize;
   final int rawSize;
@@ -77,11 +94,12 @@ class _PeParser {
       final icon = _parseIcon();
       if (version == null && icon == null) {
         return PeInfo(
-            fileDescription: null,
-            productName: null,
-            fileVersion: null,
-            originalFilename: null,
-            iconPng: null);
+          fileDescription: null,
+          productName: null,
+          fileVersion: null,
+          originalFilename: null,
+          iconPng: null,
+        );
       }
       return PeInfo(
         fileDescription: version?['FileDescription'],
@@ -102,7 +120,9 @@ class _PeParser {
     if (bd.getUint16(0, Endian.little) != 0x5A4D) return false; // 'MZ'
     final peOff = bd.getUint32(0x3C, Endian.little);
     if (peOff <= 0 || peOff + 24 > buf.length) return false;
-    if (bd.getUint32(peOff, Endian.little) != 0x00004550) return false; // 'PE\0\0'
+    if (bd.getUint32(peOff, Endian.little) != 0x00004550) {
+      return false; // 'PE\0\0'
+    }
 
     final coff = peOff + 4;
     final numSections = bd.getUint16(coff + 2, Endian.little);
@@ -121,19 +141,15 @@ class _PeParser {
 
     final secStart = optStart + sizeOfOpt;
     if (secStart + numSections * 40 > buf.length) return false;
-    _sections = List.generate(
-      numSections,
-      (i) {
-        final s = secStart + i * 40;
-        return _Section(
-          bd.getUint32(s + 12, Endian.little),
-          bd.getUint32(s + 8, Endian.little),
-          bd.getUint32(s + 16, Endian.little),
-          bd.getUint32(s + 20, Endian.little),
-        );
-      },
-      growable: false,
-    );
+    _sections = List.generate(numSections, (i) {
+      final s = secStart + i * 40;
+      return _Section(
+        bd.getUint32(s + 12, Endian.little),
+        bd.getUint32(s + 8, Endian.little),
+        bd.getUint32(s + 16, Endian.little),
+        bd.getUint32(s + 20, Endian.little),
+      );
+    }, growable: false);
 
     _resourceFileOffset = _rvaToOffset(_resourceRva);
     return _resourceFileOffset >= 0;
@@ -159,8 +175,7 @@ class _PeParser {
   /// 指针高位置 1 表示子目录，否则为 DATA_ENTRY。
   List<(int, int)> _dirEntries(int dirFileOffset) {
     if (dirFileOffset < 0 || dirFileOffset + 16 > buf.length) return const [];
-    final named =
-        bd.getUint16(dirFileOffset + 12, Endian.little); // 仅取 ID 项
+    final named = bd.getUint16(dirFileOffset + 12, Endian.little); // 仅取 ID 项
     final idCount = bd.getUint16(dirFileOffset + 14, Endian.little);
     final out = <(int, int)>[];
     for (var i = 0; i < idCount; i++) {
@@ -278,8 +293,7 @@ class _PeParser {
                 final v = _utf16(b, sq, vBytes);
                 if (v.isNotEmpty) result[sKey] = v;
               }
-              final next =
-                  (sStart + 4 + sKey.length * 2 + 2 + vBytes + 3) & ~3;
+              final next = (sStart + 4 + sKey.length * 2 + 2 + vBytes + 3) & ~3;
               if (next <= sStart) break; // 前进失败防线
               s = next;
             }
@@ -446,8 +460,7 @@ class _PeParser {
     for (var y = 0; y < height; y++) {
       final srcY = height - 1 - y; // DIB 自底向上
       final rowOff = xorStart + srcY * xorStride;
-      final andRow =
-          hasMask ? andStart + srcY * andStride : -1;
+      final andRow = hasMask ? andStart + srcY * andStride : -1;
       for (var x = 0; x < width; x++) {
         final o = (y * width + x) * 4;
         var r = 0, g = 0, b = 0, a = 255;
@@ -481,8 +494,7 @@ class _PeParser {
             r = d[q + 2];
         }
         if (hasMask && bpp < 32) {
-          final maskBit =
-              (d[andRow + (x >> 3)] >> (7 - (x & 7))) & 1;
+          final maskBit = (d[andRow + (x >> 3)] >> (7 - (x & 7))) & 1;
           if (maskBit == 1) a = 0;
         }
         rgba[o] = r;

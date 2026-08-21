@@ -34,12 +34,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void dispose() {
     _lePathCtrl.dispose();
     _leArgsCtrl.dispose();
-    _profileCtrl.dispose();
+    _leProfileCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _pickLeProc() async {
-    final res = await FilePicker.platform.pickFiles(
+    final res = await FilePicker.pickFiles(
       dialogTitle: '选择 LEProc.exe 所在路径',
       type: FileType.custom,
       allowedExtensions: ['exe'],
@@ -104,8 +104,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       _leArgsCtrl.text = kDefaultLeArgsTemplate;
                       notifier.setLeArgsTemplate(kDefaultLeArgsTemplate);
                     },
-                    child: const Text('恢复默认 (-run "{exe}")',
-                        style: TextStyle(fontSize: 11)),
+                    child: const Text(
+                      '恢复默认 (-run "{exe}")',
+                      style: TextStyle(fontSize: 11),
+                    ),
                   ),
                 ),
                 TextField(
@@ -130,7 +132,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 title: const Text('点击关闭按钮时隐藏到托盘'),
                 subtitle: const Text('保持后台精准前台计时守护，避免误关闭'),
                 value: settings.closeToTray,
-                activeColor: AppColors.accent,
+                activeThumbColor: AppColors.accent,
                 onChanged: notifier.setCloseToTray,
               ),
               const Divider(height: 1, color: AppColors.border),
@@ -138,7 +140,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 title: const Text('开机/启动时静默最小化到托盘'),
                 subtitle: const Text('启动时不展示主窗口，直接常驻后台捕获'),
                 value: settings.startHidden,
-                activeColor: AppColors.accent,
+                activeThumbColor: AppColors.accent,
                 onChanged: notifier.setStartHidden,
               ),
               const Divider(height: 1, color: AppColors.border),
@@ -146,7 +148,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 title: const Text('全局暂停前台计时统计'),
                 subtitle: const Text('开启后前台焦点引擎将冻结时长累加（同托盘右键选项）'),
                 value: settings.trackingPaused,
-                activeColor: AppColors.accent,
+                activeThumbColor: AppColors.accent,
                 onChanged: notifier.setTrackingPaused,
               ),
             ],
@@ -189,11 +191,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _sectionTitle(String text) => Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      color: AppColors.textPrimary,
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+    ),
+  );
 }

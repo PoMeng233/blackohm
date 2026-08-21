@@ -6,6 +6,8 @@ library;
 
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../../core/app_constants.dart';
 
 /// 扫描命中的 exe 候选（仅文件属性；PE 富化由 IngestionService 负责）。
@@ -70,7 +72,9 @@ List<ExeCandidate> scanForGameExes(String rootDir, {int? maxDepth}) {
     if (entries.length > kScanMaxEntriesPerDir) continue;
 
     for (final e in entries) {
-      final name = e.uri.pathSegments.isEmpty ? '' : e.uri.pathSegments.last;
+      // Directory.uri 的 pathSegments 最后会附带空元素（尾随 '/'），
+      // 因此必须从 path.basename 取名，否则所有子目录都会被错误跳过。
+      final name = p.basename(e.path);
       if (name.isEmpty || name == '.' || name == '..') continue;
       if (name.startsWith('.')) continue;
 
@@ -82,13 +86,17 @@ List<ExeCandidate> scanForGameExes(String rootDir, {int? maxDepth}) {
         if (kExeBlacklist.hasMatch(name)) continue;
         try {
           final st = e.statSync();
-          candidates.add(ExeCandidate(
-            path: e.path,
-            dirPath: dir.path,
-            sizeBytes: st.size,
-            modified: st.modified,
-          ));
-        } catch (_) {/* 文件被占用等，跳过 */}
+          candidates.add(
+            ExeCandidate(
+              path: e.path,
+              dirPath: dir.path,
+              sizeBytes: st.size,
+              modified: st.modified,
+            ),
+          );
+        } catch (_) {
+          /* 文件被占用等，跳过 */
+        }
         if (candidates.length >= 64) {
           queue.clear();
           break; // 候选爆炸防线

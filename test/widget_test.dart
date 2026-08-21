@@ -1,30 +1,75 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:blackohm/core/path_normalizer.dart';
+import 'package:blackohm/features/scanner/pe_info.dart';
+import 'package:blackohm/features/scanner/png_encoder.dart';
+import 'package:blackohm/ui/theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:blackohm/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('normalizeExePath', () {
+    test('小写化并统一反斜杠', () {
+      expect(
+        normalizeExePath(r'C:\Games\Foo\Game.EXE'),
+        r'c:\games\foo\game.exe',
+      );
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('剥离 \\\\?\\ 设备前缀', () {
+      expect(normalizeExePath(r'\\?\C:\Games\a.exe'), r'c:\games\a.exe');
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('剥离尾部分隔符', () {
+      expect(normalizeExePath(r'C:\Games\a.exe\'), r'c:\games\a.exe');
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('encodePngRgba', () {
+    test('输出合法 PNG 签名', () {
+      final png = encodePngRgba(1, 1, Uint8List.fromList([0, 229, 163, 255]));
+      expect(png.take(8).toList(), [
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+      ]);
+      expect(png.length, greaterThan(40));
+    });
+  });
+
+  group('isBoilerplateTitle', () {
+    test('KiriKiri 内核自述被识别为样板文本', () {
+      expect(
+        isBoilerplateTitle(
+          'TVP(KIRIKIRI) 2 core / Scripting Platform for Win32',
+        ),
+        isTrue,
+      );
+      expect(isBoilerplateTitle('krkr'), isTrue);
+      expect(isBoilerplateTitle('KiriKiriZ'), isTrue);
+    });
+
+    test('正常游戏描述与空值不被过滤', () {
+      expect(isBoilerplateTitle('FAVORITE 某某游戏'), isFalse);
+      expect(isBoilerplateTitle('My Visual Novel'), isFalse);
+      expect(isBoilerplateTitle(''), isTrue);
+      expect(isBoilerplateTitle(null), isTrue);
+    });
+  });
+
+  group('时长格式化', () {
+    test('总时长以小时分钟展示', () {
+      expect(formatPlayDuration(3661), '1 小时 1 分');
+      expect(formatPlayDuration(45), '45 秒');
+    });
+
+    test('实时秒表使用稳定的数字位数', () {
+      expect(formatStopwatch(83 * 1000), '01:23');
+      expect(formatStopwatch((2 * 3600 + 3 * 60 + 4) * 1000), '02:03:04');
+    });
   });
 }

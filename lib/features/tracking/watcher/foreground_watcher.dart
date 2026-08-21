@@ -34,8 +34,11 @@ class _WatcherConfig {
 
 /// 由主 isolate 调用：spawn watcher 并返回其 isolate 句柄。
 Future<Isolate> spawnForegroundWatcher(SendPort replyTo) {
-  return Isolate.spawn(_watcherMain, _WatcherConfig(replyTo),
-      debugName: 'foreground-watcher');
+  return Isolate.spawn(
+    _watcherMain,
+    _WatcherConfig(replyTo),
+    debugName: 'foreground-watcher',
+  );
 }
 
 /// 主 isolate 调用：触发 watcher 优雅关机（内核 Event 跨 isolate 有效）。
@@ -48,9 +51,8 @@ void _watcherMain(_WatcherConfig config) {
   final shutdownEvent = w.createShutdownEvent();
 
   // ── 2. 消息专用窗口：接收锁屏/睡眠系统通知 ──────────────────────
-  late final NativeCallable<w.WinEventProcDart> winEventCb;
-  late final NativeCallable<LRESULT Function(HWND, DWORD, WPARAM, LPARAM)>
-      wndProcCb;
+  late final NativeCallable<w.WinEventProcNative> winEventCb;
+  late final NativeCallable<w.WndProcNative> wndProcCb;
 
   var lastHwnd = -1;
   var locked = false;
@@ -60,8 +62,15 @@ void _watcherMain(_WatcherConfig config) {
     if (hwnd == lastHwnd) return;
     lastHwnd = hwnd;
     if (hwnd == 0) {
-      reply.send(const ForegroundSnapshot(
-          hwnd: 0, pid: 0, imagePath: null, windowTitle: '', visible: false));
+      reply.send(
+        const ForegroundSnapshot(
+          hwnd: 0,
+          pid: 0,
+          imagePath: null,
+          windowTitle: '',
+          visible: false,
+        ),
+      );
       return;
     }
     final pid = w.pidForWindow(hwnd);
@@ -75,61 +84,78 @@ void _watcherMain(_WatcherConfig config) {
         if (raw != null) imagePath = normalizeExePath(w.getLongPathName(raw));
       }
     }
-    reply.send(ForegroundSnapshot(
-      hwnd: hwnd,
-      pid: pid,
-      imagePath: imagePath,
-      windowTitle: w.windowText(hwnd),
-      visible: w.isWindowVisible(hwnd) && !w.isIconic(hwnd),
-    ));
+    reply.send(
+      ForegroundSnapshot(
+        hwnd: hwnd,
+        pid: pid,
+        imagePath: imagePath,
+        windowTitle: w.windowText(hwnd),
+        visible: w.isWindowVisible(hwnd) && !w.isIconic(hwnd),
+      ),
+    );
   }
 
   // ── 3. WinEvent 钩子回调（isolate-local：在泵消息时同线程同步回调）──
-  winEventCb =
-      NativeCallable<w.WinEventProcDart>.isolateLocal((hook, event, hwnd,
-          idObject, idChild, eventThread, eventTime) {
-        const objidWindow = 0; // OBJID_WINDOW
-        if (idObject != objidWindow || hwnd == 0) return;
-        if (locked || suspended) return; // 锁屏/睡眠期间忽略前台噪声
-        emitSnapshot(hwnd);
-      });
+  winEventCb = NativeCallable<w.WinEventProcNative>.isolateLocal((
+    int hook,
+    int event,
+    int hwnd,
+    int idObject,
+    int idChild,
+    int eventThread,
+    int eventTime,
+  ) {
+    const objidWindow = 0;
+    if (idObject != objidWindow || hwnd == 0) return;
+    if (locked || suspended) return;
+    emitSnapshot(hwnd);
+  });
 
   // ── 4. 窗口过程：转发锁屏/睡眠事件 ─────────────────────────────
-  wndProcCb = NativeCallable<LRESULT Function(HWND, DWORD, WPARAM, LPARAM)>
-      .isolateLocal((hwnd, msg, wParam, lParam) {
+  wndProcCb = NativeCallable<w.WndProcNative>.isolateLocal((
+    int hwnd,
+    int msg,
+    int wParam,
+    int lParam,
+  ) {
     switch (msg) {
-      case w.WM_WTSSESSION_CHANGE:
-        if (wParam == w.WTS_SESSION_LOCK) {
+      case w.wmWtsSessionChange:
+        if (wParam == w.wtsSessionLock) {
           locked = true;
           reply.send(const SystemLocked());
-        } else if (wParam == w.WTS_SESSION_UNLOCK) {
+        } else if (wParam == w.wtsSessionUnlock) {
           locked = false;
           reply.send(const SystemUnlocked());
         }
         return 0;
-      case w.WM_POWERBROADCAST:
-        if (wParam == w.PBT_APMSUSPEND) {
+      case w.wmPowerBroadcast:
+        if (wParam == w.pbtApmSuspend) {
           suspended = true;
           reply.send(const SystemSuspend());
-        } else if (wParam == w.PBT_APMRESUMEAUTOMATIC) {
+        } else if (wParam == w.pbtApmResumeAutomatic) {
           suspended = false;
           reply.send(const SystemResumed());
         }
-        return 1; // TRUE 表示已处理电源广播
-      case w.WM_CLOSE:
-        return 0; // 忽略外部关闭请求，仅受关机事件控制
+        return 1;
+      case w.wmClose:
+        return 0;
       default:
         return w.defWindowProc(hwnd, msg, wParam, lParam);
     }
-  }));
+  }, exceptionalReturn: 0);
 
   final hInst = w.getModuleHandleNull();
   const className = 'BlackOhmWatcherWnd';
-  final wc = calloc<WndClassExW>();
+  final wc = calloc<w.WndClassExW>();
   var atom = 0, hwnd = 0, hook = 0, powerNotify = 0, wtsOk = false;
 
   try {
-    atom = w.registerWatcherWindowClass(wc, className, hInst, wndProcCb.nativeFunction);
+    atom = w.registerWatcherWindowClass(
+      wc,
+      className,
+      hInst,
+      wndProcCb.nativeFunction,
+    );
     hwnd = w.createMessageOnlyWindow(className, hInst);
     wtsOk = hwnd != 0 && w.wtsRegisterSessionNotification(hwnd);
     powerNotify = hwnd != 0 ? w.registerSuspendResumeNotification(hwnd) : 0;
@@ -140,14 +166,13 @@ void _watcherMain(_WatcherConfig config) {
     emitSnapshot(w.getForegroundWindow());
 
     // ── 6. 主泵：内核阻塞等待，空闲 0% CPU ─────────────────────
-    final msgBuf = calloc<Msg>();
+    final msgBuf = calloc<w.Msg>();
     var ticks = 0;
     var running = true;
     while (running) {
-      final wait = w.msgWaitForMultipleObjectsEx([shutdownEvent], w2ms());
-      if (wait == w.WAIT_OBJECT_0) break; // 关机信号
-      if (wait == w.WAIT_FAILED) break;
-      // 分发消息（WinEvent 回调 / WndProc 在此同步执行）
+      final wait = w.msgWaitForMultipleObjectsEx([shutdownEvent], 250);
+      if (wait == w.waitObject0) break;
+      if (wait == w.waitFailed) break;
       if (!w.pumpMessages(msgBuf)) break;
       // 心跳兜底：约每秒校验一次前台窗口真实状态
       if (++ticks >= 4) {
@@ -170,6 +195,3 @@ void _watcherMain(_WatcherConfig config) {
     calloc.free(wc);
   }
 }
-
-/// 250ms 保活超时（与 kWatcherHeartbeat 解耦的常量，避免 core 依赖倒挂）。
-int w2ms() => 250;

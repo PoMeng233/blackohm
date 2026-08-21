@@ -20,20 +20,25 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 });
 
 final gameRepoProvider = Provider<GameRepository>(
-    (ref) => GameRepository(ref.watch(databaseProvider)));
+  (ref) => GameRepository(ref.watch(databaseProvider)),
+);
 
 final sessionRepoProvider = Provider<SessionRepository>(
-    (ref) => SessionRepository(ref.watch(databaseProvider)));
+  (ref) => SessionRepository(ref.watch(databaseProvider)),
+);
 
 final settingsRepoProvider = Provider<SettingsRepository>(
-    (ref) => SettingsRepository(ref.watch(databaseProvider)));
+  (ref) => SettingsRepository(ref.watch(databaseProvider)),
+);
 
 // ── 游戏库视图 ────────────────────────────────────────────────
 final gameListProvider = StreamProvider<List<Game>>(
-    (ref) => ref.watch(gameRepoProvider).watchAll());
+  (ref) => ref.watch(gameRepoProvider).watchAll(),
+);
 
 final recentGamesProvider = StreamProvider<List<Game>>(
-    (ref) => ref.watch(gameRepoProvider).watchRecent());
+  (ref) => ref.watch(gameRepoProvider).watchRecent(),
+);
 
 // ── 焦点计时引擎 ──────────────────────────────────────────────
 final trackingEngineProvider = Provider<TrackingEngine>((ref) {
@@ -51,7 +56,8 @@ final trackingEngineProvider = Provider<TrackingEngine>((ref) {
 
 /// 当前活跃会话状态（驱动呼吸光效卡片与实时秒表）。
 final trackingStateProvider = StreamProvider<TrackingPublicState>(
-    (ref) => ref.watch(trackingEngineProvider).states);
+  (ref) => ref.watch(trackingEngineProvider).states,
+);
 
 // ── 设置 ──────────────────────────────────────────────────────
 class AppSettingsState {
@@ -78,19 +84,19 @@ class AppSettingsState {
     bool? startHidden,
     bool? closeToTray,
     bool? trackingPaused,
-  }) =>
-      AppSettingsState(
-        leProcPath: leProcPath ?? this.leProcPath,
-        leArgsTemplate: leArgsTemplate ?? this.leArgsTemplate,
-        leProfile: leProfile ?? this.leProfile,
-        startHidden: startHidden ?? this.startHidden,
-        closeToTray: closeToTray ?? this.closeToTray,
-        trackingPaused: trackingPaused ?? this.trackingPaused,
-      );
+  }) => AppSettingsState(
+    leProcPath: leProcPath ?? this.leProcPath,
+    leArgsTemplate: leArgsTemplate ?? this.leArgsTemplate,
+    leProfile: leProfile ?? this.leProfile,
+    startHidden: startHidden ?? this.startHidden,
+    closeToTray: closeToTray ?? this.closeToTray,
+    trackingPaused: trackingPaused ?? this.trackingPaused,
+  );
 }
 
 class SettingsController extends StateNotifier<AppSettingsState> {
-  SettingsController(this._repo, this._engine) : super(const AppSettingsState()) {
+  SettingsController(this._repo, this._engine)
+    : super(const AppSettingsState()) {
     _load();
   }
 
@@ -99,12 +105,16 @@ class SettingsController extends StateNotifier<AppSettingsState> {
 
   Future<void> _load() async {
     final lePath = await _repo.get(SettingsKeys.leProcPath);
-    final leArgs =
-        await _repo.get(SettingsKeys.leArgsTemplate, defaultValue: kDefaultLeArgsTemplate);
+    final leArgs = await _repo.get(
+      SettingsKeys.leArgsTemplate,
+      defaultValue: kDefaultLeArgsTemplate,
+    );
     final leProfile = await _repo.get(SettingsKeys.leProfile);
     final startHidden = await _repo.getBool(SettingsKeys.startHidden);
-    final closeToTray =
-        await _repo.getBool(SettingsKeys.closeToTray, defaultValue: true);
+    final closeToTray = await _repo.getBool(
+      SettingsKeys.closeToTray,
+      defaultValue: true,
+    );
     final paused = await _repo.getBool(SettingsKeys.trackingPaused);
     state = AppSettingsState(
       leProcPath: lePath,
@@ -149,6 +159,10 @@ class SettingsController extends StateNotifier<AppSettingsState> {
   }
 }
 
-final settingsProvider = StateNotifierProvider<SettingsController, AppSettingsState>(
-    (ref) => SettingsController(
-        ref.watch(settingsRepoProvider), ref.watch(trackingEngineProvider)));
+final settingsProvider =
+    StateNotifierProvider<SettingsController, AppSettingsState>(
+      (ref) => SettingsController(
+        ref.watch(settingsRepoProvider),
+        ref.watch(trackingEngineProvider),
+      ),
+    );

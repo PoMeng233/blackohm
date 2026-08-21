@@ -13,9 +13,7 @@ class GameRepository {
   /// 全库列表（标题排序），驱动库页面网格/列表双视图。
   Stream<List<Game>> watchAll() {
     final q = _db.select(_db.games)
-      ..orderBy([
-        (g) => OrderingTerm(expression: g.title),
-      ]);
+      ..orderBy([(g) => OrderingTerm(expression: g.title)]);
     return q.watch();
   }
 
@@ -52,9 +50,9 @@ class GameRepository {
   Future<int> insert(GamesCompanion entry) =>
       _db.into(_db.games).insert(entry, mode: InsertMode.insertOrIgnore);
 
-  Future<bool> update(int id, GamesCompanion patch) =>
-      (_db.update(_db.games)..where((g) => g.id.equals(id))).write(patch).then(
-          (rows) => rows > 0);
+  Future<bool> update(int id, GamesCompanion patch) => (_db.update(
+    _db.games,
+  )..where((g) => g.id.equals(id))).write(patch).then((rows) => rows > 0);
 
   Future<int> delete(int id) =>
       (_db.delete(_db.games)..where((g) => g.id.equals(id))).go();
@@ -62,9 +60,11 @@ class GameRepository {
   /// 焦点引擎命中后的轻量维护：启动时间戳 + 总时长增量（会话提交时调用）。
   Future<void> addPlayedSeconds(int gameId, int seconds) {
     final q = _db.update(_db.games)..where((g) => g.id.equals(gameId));
-    return q.write(GamesCompanion.custom(
-      totalPlaySeconds: _db.games.totalPlaySeconds + seconds,
-      lastPlayedAt: Value(DateTime.now()),
-    ));
+    return q.write(
+      GamesCompanion.custom(
+        totalPlaySeconds: _db.games.totalPlaySeconds + Variable(seconds),
+        lastPlayedAt: Variable(DateTime.now()),
+      ),
+    );
   }
 }

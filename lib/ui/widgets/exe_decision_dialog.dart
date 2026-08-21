@@ -56,16 +56,15 @@ class ExeDecisionDialog extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: candidates.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final c = candidates[i];
-                    final fileName =
-                        c.path.split(Platform.pathSeparator).last;
-                    int size = 0;
-                    try {
-                      size = File(c.path).lengthSync();
-                    } catch (_) {}
-                    final sizeMb = (size / (1024 * 1024)).toStringAsFixed(1);
+                    final fileName = c.path.split(Platform.pathSeparator).last;
+                    final sizeMb = (c.sizeBytes / (1024 * 1024))
+                        .toStringAsFixed(1);
+                    final modified =
+                        '${c.modified.year}-${c.modified.month.toString().padLeft(2, '0')}-${c.modified.day.toString().padLeft(2, '0')} '
+                        '${c.modified.hour.toString().padLeft(2, '0')}:${c.modified.minute.toString().padLeft(2, '0')}';
 
                     return Material(
                       color: AppColors.surfaceHover,
@@ -96,8 +95,10 @@ class ExeDecisionDialog extends StatelessWidget {
                                         color: AppColors.surfaceActive,
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: const Icon(Icons.sports_esports,
-                                          color: AppColors.textMuted),
+                                      child: const Icon(
+                                        Icons.sports_esports,
+                                        color: AppColors.textMuted,
+                                      ),
                                     ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -116,7 +117,7 @@ class ExeDecisionDialog extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${c.path} · $sizeMb MB',
+                                      '$sizeMb MB · 修改于 $modified · ${c.path}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -127,8 +128,10 @@ class ExeDecisionDialog extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              const Icon(Icons.chevron_right,
-                                  color: AppColors.textMuted),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: AppColors.textMuted,
+                              ),
                             ],
                           ),
                         ),
@@ -142,8 +145,10 @@ class ExeDecisionDialog extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消',
-                      style: TextStyle(color: AppColors.textSecondary)),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
                 ),
               ),
             ],
