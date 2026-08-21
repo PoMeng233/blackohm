@@ -55,8 +55,9 @@ Uint8List encodePngRgba(int width, int height, Uint8List rgba) {
   final stride = width * 4;
   final raw = Uint8List(height * (stride + 1));
   for (var y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0;
-    raw.setAll(y * (stride + 1) + 1, rgba, y * stride);
+    final rowStart = y * (stride + 1);
+    raw[rowStart] = 0;
+    raw.setRange(rowStart + 1, rowStart + 1 + stride, rgba, y * stride);
   }
 
   final ihdr = Uint8List(13);
