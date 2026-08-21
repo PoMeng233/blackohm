@@ -14,6 +14,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 - **Locale Emulator 集成**：每款游戏可选择 LE 启动；LEProc 路径、Profile 与参数模板均可配置。计时按最终游戏窗口镜像路径匹配，不受代理进程影响。
 - **本地优先**：Drift + SQLite 3（WAL）存储，无账户、无网络请求、无云同步依赖。
 - **Windows 托盘体验**：关闭隐藏到托盘、显示窗口、暂停统计、最近游玩快速启动和退出。
+- **MiSans 字体**：内置小米 [MiSans](https://hyperos.mi.com/font/) Regular 字重作为全局 UI 字体，中文显示统一清晰，无需系统安装。
 
 ## 已验证
 
@@ -124,8 +125,9 @@ lib/
 ├── providers.dart                        # Riverpod DI / 生命周期
 └── main.dart
 assets/
-├── icon_source.png                       # 当前 G 图标源图
-└── tray.ico                              # 脚本生成的多尺寸托盘图标
+├── fonts/MiSans-Regular.otf                # 内置 MiSans 全局 UI 字体
+├── icon_source.png                         # 当前 G 图标源图
+└── tray.ico                                # 脚本生成的多尺寸托盘图标
 
 docs/ARCHITECTURE.md                      # 数据流、性能和约束说明
 tool/generate_app_icons.py                # 从 icon_source.png 生成两个 ICO
