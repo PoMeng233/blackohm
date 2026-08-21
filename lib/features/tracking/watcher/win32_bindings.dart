@@ -33,6 +33,7 @@ const int wmQuit = 0x0012;
 const int wmClose = 0x0010;
 const int wmPowerBroadcast = 0x0218;
 const int pbtApmSuspend = 0x0004;
+const int pbtApmResumeSuspend = 0x0007;
 const int pbtApmResumeAutomatic = 0x0012;
 const int wmWtsSessionChange = 0x02B1;
 const int wtsSessionLock = 0x7;

@@ -72,6 +72,18 @@ class SessionRepository {
     return q.watch();
   }
 
+  /// 查询与时间范围相交的会话，支持跨午夜和进行中的会话。
+  Stream<List<PlaySession>> watchInRange(DateTime start, DateTime end) {
+    final q = _db.select(_db.playSessions)
+      ..where(
+        (s) =>
+            s.startedAt.isSmallerOrEqualValue(end) &
+            (s.endedAt.isNull() | s.endedAt.isBiggerOrEqualValue(start)),
+      )
+      ..orderBy([(s) => OrderingTerm.desc(s.startedAt)]);
+    return q.watch();
+  }
+
   /// 全库会话时间线（最近优先）。
   Stream<List<PlaySession>> watchRecentAll({int limit = 200}) {
     final q = _db.select(_db.playSessions)

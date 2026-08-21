@@ -61,6 +61,26 @@ class LaunchService {
     return launchDirect(game);
   }
 
+  /// 在资源管理器中打开游戏目录，并选中当前运行文件。
+  Future<bool> openGameDirectory(Game game) async {
+    final directory = Directory(game.dirPath);
+    if (!directory.existsSync()) return false;
+    try {
+      final executable = File(game.exePath);
+      final arguments = executable.existsSync()
+          ? <String>['/select,${game.exePath}']
+          : <String>[game.dirPath];
+      await Process.start(
+        'explorer.exe',
+        arguments,
+        mode: ProcessStartMode.detached,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 模板展开：`-run "{exe}"` → ['-run', 'C:\...\game.exe']。
   /// 占位符替换后为空的 token（如未配置 {profile}）整段丢弃。
   List<String> _expandTemplate(

@@ -1,4 +1,4 @@
-/// 时长可视化页面：总览、近 7 日趋势、游戏排行与最近 Session。
+/// 时长统计：30 天 / 当前季度 / 当前年度 + GitHub 风格活跃热图。
 library;
 
 import 'dart:math' as math;
@@ -11,22 +11,57 @@ import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
 
-class InsightsPage extends ConsumerWidget {
+enum InsightsRange { month, quarter, year }
+
+class InsightsPage extends ConsumerStatefulWidget {
   const InsightsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final gamesAsync = ref.watch(gameListProvider);
+  ConsumerState<InsightsPage> createState() => _InsightsPageState();
+}
+
+class _InsightsPageState extends ConsumerState<InsightsPage> {
+  InsightsRange _range = InsightsRange.month;
+
+  ({DateTime start, DateTime end}) _bounds() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return switch (_range) {
+      InsightsRange.month => (
+        start: today.subtract(const Duration(days: 29)),
+        end: today.add(const Duration(days: 1)),
+      ),
+      InsightsRange.quarter => (
+        start: DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1),
+        end: today.add(const Duration(days: 1)),
+      ),
+      InsightsRange.year => (
+        start: DateTime(now.year),
+        end: today.add(const Duration(days: 1)),
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bounds = _bounds();
+    final games = ref.watch(gameListProvider).value ?? const <Game>[];
     final active =
         ref.watch(trackingStateProvider).value ??
         ref.watch(trackingEngineProvider).current;
-    final sessions = ref.read(sessionRepoProvider).watchRecentAll(limit: 1000);
+    final sessions = ref
+        .read(sessionRepoProvider)
+        .watchInRange(bounds.start, bounds.end);
 
     return StreamBuilder<List<PlaySession>>(
       stream: sessions,
       builder: (context, snapshot) {
-        final games = gamesAsync.value ?? const <Game>[];
-        final model = _InsightsModel.from(games, snapshot.data ?? const []);
+        final model = _InsightsModel.from(
+          games: games,
+          sessions: snapshot.data ?? const [],
+          start: bounds.start,
+          end: bounds.end,
+        );
         return ListView(
           padding: const EdgeInsets.fromLTRB(24, 22, 24, 32),
           children: [
@@ -55,51 +90,67 @@ class InsightsPage extends ConsumerWidget {
               '只统计游戏窗口真正处于前台的时间',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            SegmentedButton<InsightsRange>(
+              segments: const [
+                ButtonSegment(
+                  value: InsightsRange.month,
+                  label: Text('近 30 天'),
+                ),
+                ButtonSegment(value: InsightsRange.quarter, label: Text('本季度')),
+                ButtonSegment(value: InsightsRange.year, label: Text('本年度')),
+              ],
+              selected: {_range},
+              onSelectionChanged: (value) =>
+                  setState(() => _range = value.first),
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                side: WidgetStatePropertyAll(
+                  BorderSide(color: AppColors.border),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 850;
                 final cards = [
                   _MetricCard(
-                    icon: Icons.today_rounded,
-                    label: '今日游玩',
-                    value: formatPlayDuration(model.todaySeconds),
-                    accent: AppColors.accent,
+                    '当前范围',
+                    formatPlayDuration(model.rangeSeconds),
+                    Icons.timelapse,
+                    AppColors.accent,
                   ),
                   _MetricCard(
-                    icon: Icons.date_range_rounded,
-                    label: '近 7 天',
-                    value: formatPlayDuration(model.weekSeconds),
-                    accent: const Color(0xFF60A5FA),
+                    '今日游玩',
+                    formatPlayDuration(model.todaySeconds),
+                    Icons.today_rounded,
+                    const Color(0xFF60A5FA),
                   ),
                   _MetricCard(
-                    icon: Icons.auto_stories_rounded,
-                    label: '库内总时长',
-                    value: formatPlayDuration(model.totalSeconds),
-                    accent: AppColors.leBadge,
+                    '库内总时长',
+                    formatPlayDuration(model.lifetimeSeconds),
+                    Icons.auto_stories_rounded,
+                    AppColors.leBadge,
                   ),
                   _MetricCard(
-                    icon: Icons.layers_rounded,
-                    label: '已记录会话',
-                    value: '${model.sessionCount} 次',
-                    accent: const Color(0xFFF59E0B),
+                    '范围内会话',
+                    '${model.sessionCount} 次',
+                    Icons.layers_rounded,
+                    const Color(0xFFF59E0B),
                   ),
                 ];
-                if (compact) {
+                if (constraints.maxWidth < 850) {
                   return Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     children: cards
                         .map(
                           (card) => SizedBox(
-                            width: math.max(
-                              200,
-                              (constraints.maxWidth - 12) / 2,
-                            ),
+                            width: (constraints.maxWidth - 12) / 2,
                             child: card,
                           ),
                         )
-                        .toList(growable: false),
+                        .toList(),
                   );
                 }
                 return Row(
@@ -112,30 +163,33 @@ class InsightsPage extends ConsumerWidget {
                 );
               },
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 18),
             _SectionCard(
-              title: '近 7 日前台游玩趋势',
-              subtitle: '时长按 Session 实际跨日边界切分',
-              child: _SevenDayChart(days: model.days),
+              title: '前台游玩热图',
+              subtitle: '${_rangeLabel(_range)} · 每格代表一个自然日',
+              child: _ActivityHeatmap(
+                start: bounds.start,
+                end: bounds.end,
+                daily: model.daily,
+              ),
             ),
             const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
-                final narrow = constraints.maxWidth < 860;
                 final ranking = _SectionCard(
-                  title: '游戏时长排行',
-                  subtitle: '以库内累计前台时长排序',
+                  title: '范围内游戏排行',
+                  subtitle: '按当前选择范围内的 Session 聚合',
                   child: _TopGames(games: model.topGames),
                 );
                 final recent = _SectionCard(
                   title: '最近 Session',
-                  subtitle: '失焦超过 3 秒、锁屏或睡眠时结束',
+                  subtitle: '只展示当前范围内已完成记录',
                   child: _RecentSessions(
-                    sessions: model.recentSessions,
+                    sessions: model.recent,
                     gameFor: model.gameFor,
                   ),
                 );
-                if (narrow) {
+                if (constraints.maxWidth < 860) {
                   return Column(
                     children: [ranking, const SizedBox(height: 18), recent],
                   );
@@ -157,69 +211,67 @@ class InsightsPage extends ConsumerWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
+String _rangeLabel(InsightsRange range) => switch (range) {
+  InsightsRange.month => '最近 30 天',
+  InsightsRange.quarter => '本季度',
+  InsightsRange.year => '本年度',
+};
 
-  final IconData icon;
+class _MetricCard extends StatelessWidget {
+  const _MetricCard(this.label, this.value, this.icon, this.accent);
   final String label;
   final String value;
+  final IconData icon;
   final Color accent;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: accent.withAlpha(34),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: accent, size: 21),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: accent.withAlpha(34),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
+          child: Icon(icon, color: accent, size: 21),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                  ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionCard extends StatelessWidget {
@@ -228,65 +280,101 @@ class _SectionCard extends StatelessWidget {
     required this.subtitle,
     required this.child,
   });
-
   final String title;
   final String subtitle;
   final Widget child;
 
   @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+        ),
+        const SizedBox(height: 16),
+        child,
+      ],
+    ),
+  );
+}
+
+class _ActivityHeatmap extends StatelessWidget {
+  const _ActivityHeatmap({
+    required this.start,
+    required this.end,
+    required this.daily,
+  });
+  final DateTime start;
+  final DateTime end;
+  final Map<DateTime, int> daily;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
+    final gridStart = start.subtract(Duration(days: start.weekday % 7));
+    final lastDay = end.subtract(const Duration(days: 1));
+    final gridEnd = lastDay.add(Duration(days: 6 - (lastDay.weekday % 7)));
+    final columns = (gridEnd.difference(gridStart).inDays + 1) ~/ 7;
+    final maxSeconds = daily.values.fold<int>(0, math.max);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _SevenDayChart extends StatelessWidget {
-  const _SevenDayChart({required this.days});
-
-  final List<_DailyPlay> days;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxSeconds = days.fold<int>(
-      0,
-      (max, day) => math.max(max, day.seconds),
-    );
-    return SizedBox(
-      height: 180,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final day in days)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: _Bar(day: day, maxSeconds: maxSeconds),
+          const SizedBox(width: 28),
+          for (var col = 0; col < columns; col++)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Column(
+                children: [
+                  ...List.generate(7, (row) {
+                    final date = gridStart.add(Duration(days: col * 7 + row));
+                    final inRange = !date.isBefore(start) && date.isBefore(end);
+                    final seconds = inRange
+                        ? (daily[DateTime(date.year, date.month, date.day)] ??
+                              0)
+                        : 0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Tooltip(
+                        message: inRange
+                            ? '${_dateLabel(date)}\n${formatPlayDuration(seconds)}'
+                            : '',
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: inRange
+                                ? _heatColor(seconds, maxSeconds)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(3),
+                            border: inRange
+                                ? Border.all(
+                                    color: AppColors.border.withAlpha(100),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
         ],
@@ -295,70 +383,26 @@ class _SevenDayChart extends StatelessWidget {
   }
 }
 
-class _Bar extends StatelessWidget {
-  const _Bar({required this.day, required this.maxSeconds});
-
-  final _DailyPlay day;
-  final int maxSeconds;
-
-  @override
-  Widget build(BuildContext context) {
-    final ratio = maxSeconds == 0 ? 0.0 : day.seconds / maxSeconds;
-    final height = math.max(4.0, ratio * 118);
-    final today = _sameDay(day.date, DateTime.now());
-    return Tooltip(
-      message: '${day.fullLabel}：${formatPlayDuration(day.seconds)}',
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Text(
-            day.seconds == 0 ? '' : formatPlayDuration(day.seconds),
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            height: height,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: today
-                    ? const [AppColors.accent, Color(0xFF0B9B73)]
-                    : const [Color(0xFF64748B), Color(0xFF334155)],
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(5),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            day.label,
-            style: TextStyle(
-              color: today ? AppColors.accent : AppColors.textSecondary,
-              fontWeight: today ? FontWeight.bold : FontWeight.normal,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+Color _heatColor(int seconds, int maxSeconds) {
+  if (seconds <= 0) return AppColors.surfaceActive;
+  final ratio = maxSeconds <= 0 ? 0.0 : seconds / maxSeconds;
+  if (ratio < .25) return const Color(0xFF166534);
+  if (ratio < .5) return const Color(0xFF15803D);
+  if (ratio < .75) return const Color(0xFF16A34A);
+  return AppColors.accent;
 }
+
+String _dateLabel(DateTime date) =>
+    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
 class _TopGames extends StatelessWidget {
   const _TopGames({required this.games});
-
-  final List<Game> games;
+  final List<_RangeGame> games;
 
   @override
   Widget build(BuildContext context) {
-    if (games.isEmpty) {
-      return const _EmptyState(message: '尚无已累计的游玩时长');
-    }
-    final maxSeconds = games.first.totalPlaySeconds;
+    if (games.isEmpty) return const _EmptyState(message: '当前范围暂无游玩时长');
+    final maxSeconds = games.first.seconds;
     return Column(
       children: [
         for (var i = 0; i < games.length; i++) ...[
@@ -370,20 +414,25 @@ class _TopGames extends StatelessWidget {
   }
 }
 
+class _RangeGame {
+  const _RangeGame(this.game, this.seconds);
+  final Game game;
+  final int seconds;
+}
+
 class _RankRow extends StatelessWidget {
   const _RankRow({
     required this.game,
     required this.rank,
     required this.maxSeconds,
   });
-
-  final Game game;
+  final _RangeGame game;
   final int rank;
   final int maxSeconds;
 
   @override
   Widget build(BuildContext context) {
-    final ratio = maxSeconds == 0 ? 0.0 : game.totalPlaySeconds / maxSeconds;
+    final ratio = maxSeconds == 0 ? 0.0 : game.seconds / maxSeconds;
     return Row(
       children: [
         SizedBox(
@@ -393,10 +442,10 @@ class _RankRow extends StatelessWidget {
             style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
           ),
         ),
-        if (game.iconPng != null)
+        if (game.game.iconPng != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: Image.memory(game.iconPng!, width: 26, height: 26),
+            child: Image.memory(game.game.iconPng!, width: 26, height: 26),
           )
         else
           const Icon(
@@ -413,7 +462,7 @@ class _RankRow extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      game.title,
+                      game.game.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -424,7 +473,7 @@ class _RankRow extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    formatPlayDuration(game.totalPlaySeconds),
+                    formatPlayDuration(game.seconds),
                     style: const TextStyle(
                       color: AppColors.accent,
                       fontSize: 11,
@@ -455,14 +504,13 @@ class _RankRow extends StatelessWidget {
 
 class _RecentSessions extends StatelessWidget {
   const _RecentSessions({required this.sessions, required this.gameFor});
-
   final List<PlaySession> sessions;
   final Game? Function(int? id) gameFor;
 
   @override
   Widget build(BuildContext context) {
     if (sessions.isEmpty) {
-      return const _EmptyState(message: '尚无完成的游玩 Session');
+      return const _EmptyState(message: '当前范围暂无完成的 Session');
     }
     return Column(
       children: [
@@ -481,16 +529,14 @@ class _RecentSessions extends StatelessWidget {
 
 class _SessionRow extends StatelessWidget {
   const _SessionRow({required this.session, required this.game});
-
   final PlaySession session;
   final Game? game;
 
   @override
   Widget build(BuildContext context) {
-    final started = session.startedAt;
-    final time =
-        '${started.month.toString().padLeft(2, '0')}-${started.day.toString().padLeft(2, '0')} '
-        '${started.hour.toString().padLeft(2, '0')}:${started.minute.toString().padLeft(2, '0')}';
+    final t = session.startedAt;
+    final date =
+        '${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')} ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     return Row(
       children: [
         if (game?.iconPng != null)
@@ -520,7 +566,7 @@ class _SessionRow extends StatelessWidget {
                 ),
               ),
               Text(
-                time,
+                date,
                 style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 10,
@@ -544,7 +590,6 @@ class _SessionRow extends StatelessWidget {
 
 class _ActivePill extends StatelessWidget {
   const _ActivePill({required this.active, required this.game});
-
   final TrackingPublicState active;
   final Game? game;
 
@@ -563,24 +608,13 @@ class _ActivePill extends StatelessWidget {
         border: Border.all(color: AppColors.accent.withAlpha(100)),
         borderRadius: BorderRadius.circular(99),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.fiber_manual_record,
-            color: AppColors.accent,
-            size: 10,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            '${game?.title ?? '游戏'} · ${formatStopwatch(active.elapsedMs)}',
-            style: const TextStyle(
-              color: AppColors.accent,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
+      child: Text(
+        '${game?.title ?? '游戏'} · ${formatStopwatch(active.elapsedMs)}',
+        style: const TextStyle(
+          color: AppColors.accent,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -589,7 +623,6 @@ class _ActivePill extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.message});
   final String message;
-
   @override
   Widget build(BuildContext context) => SizedBox(
     height: 100,
@@ -602,94 +635,83 @@ class _EmptyState extends StatelessWidget {
   );
 }
 
-class _DailyPlay {
-  const _DailyPlay({required this.date, required this.seconds});
-
-  final DateTime date;
-  final int seconds;
-
-  String get label =>
-      const ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.weekday % 7];
-
-  String get fullLabel =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-}
-
 class _InsightsModel {
   _InsightsModel({
-    required this.totalSeconds,
+    required this.rangeSeconds,
     required this.todaySeconds,
-    required this.weekSeconds,
+    required this.lifetimeSeconds,
     required this.sessionCount,
-    required this.days,
+    required this.daily,
     required this.topGames,
-    required this.recentSessions,
+    required this.recent,
     required this.gameFor,
   });
 
-  factory _InsightsModel.from(List<Game> games, List<PlaySession> sessions) {
+  factory _InsightsModel.from({
+    required List<Game> games,
+    required List<PlaySession> sessions,
+    required DateTime start,
+    required DateTime end,
+  }) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final start = today.subtract(const Duration(days: 6));
-    final daily = List<int>.filled(7, 0);
-
+    final daily = <DateTime, int>{};
+    final byGame = <int, int>{};
+    var total = 0;
     for (final session in sessions) {
-      if (session.durationSeconds <= 0) continue;
-      var cursor = session.startedAt;
-      var end =
-          session.endedAt ??
-          session.startedAt.add(Duration(seconds: session.durationSeconds));
-      if (!end.isAfter(cursor)) {
-        end = cursor.add(Duration(seconds: session.durationSeconds));
-      }
-      while (cursor.isBefore(end)) {
-        final dayStart = DateTime(cursor.year, cursor.month, cursor.day);
-        final nextDay = dayStart.add(const Duration(days: 1));
-        final chunkEnd = end.isBefore(nextDay) ? end : nextDay;
-        if (!dayStart.isBefore(start) &&
-            dayStart.isBefore(today.add(const Duration(days: 1)))) {
-          final index = dayStart.difference(start).inDays;
-          if (index >= 0 && index < daily.length) {
-            daily[index] += chunkEnd.difference(cursor).inSeconds;
-          }
+      if (session.durationSeconds <= 0 || session.gameId == null) continue;
+      var cursor = session.startedAt.isAfter(start) ? session.startedAt : start;
+      var sessionEnd = session.endedAt ?? now;
+      final fallbackEnd = session.startedAt.add(
+        Duration(seconds: session.durationSeconds),
+      );
+      if (!sessionEnd.isAfter(session.startedAt)) sessionEnd = fallbackEnd;
+      final clippedEnd = sessionEnd.isBefore(end) ? sessionEnd : end;
+      if (!clippedEnd.isAfter(cursor)) continue;
+      while (cursor.isBefore(clippedEnd)) {
+        final day = DateTime(cursor.year, cursor.month, cursor.day);
+        final next = day.add(const Duration(days: 1));
+        final chunkEnd = clippedEnd.isBefore(next) ? clippedEnd : next;
+        final seconds = chunkEnd.difference(cursor).inSeconds;
+        if (seconds > 0) {
+          daily[day] = (daily[day] ?? 0) + seconds;
+          byGame[session.gameId!] = (byGame[session.gameId!] ?? 0) + seconds;
+          total += seconds;
         }
         cursor = chunkEnd;
       }
     }
-
     final gameMap = {for (final game in games) game.id: game};
-    final ranked = games.where((g) => g.totalPlaySeconds > 0).toList()
-      ..sort((a, b) => b.totalPlaySeconds.compareTo(a.totalPlaySeconds));
-    final recent = sessions.where((s) => s.durationSeconds > 0).toList()
-      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
-
+    final ranked =
+        byGame.entries
+            .where((entry) => gameMap.containsKey(entry.key))
+            .map((entry) => _RangeGame(gameMap[entry.key]!, entry.value))
+            .toList()
+          ..sort((a, b) => b.seconds.compareTo(a.seconds));
+    final today = DateTime(now.year, now.month, now.day);
     return _InsightsModel(
-      totalSeconds: games.fold(0, (sum, game) => sum + game.totalPlaySeconds),
-      todaySeconds: daily.last,
-      weekSeconds: daily.fold(0, (sum, seconds) => sum + seconds),
-      sessionCount: sessions.where((s) => s.durationSeconds > 0).length,
-      days: List.generate(
-        7,
-        (i) => _DailyPlay(
-          date: start.add(Duration(days: i)),
-          seconds: daily[i],
-        ),
+      rangeSeconds: total,
+      todaySeconds: daily[today] ?? 0,
+      lifetimeSeconds: games.fold(
+        0,
+        (sum, game) => sum + game.totalPlaySeconds,
       ),
+      sessionCount: sessions.where((s) => s.durationSeconds > 0).length,
+      daily: daily,
       topGames: ranked.take(5).toList(growable: false),
-      recentSessions: recent.take(5).toList(growable: false),
+      recent: sessions
+          .where((s) => s.durationSeconds > 0)
+          .take(5)
+          .toList(growable: false),
       gameFor: (id) => id == null ? null : gameMap[id],
     );
   }
 
-  final int totalSeconds;
+  final int rangeSeconds;
   final int todaySeconds;
-  final int weekSeconds;
+  final int lifetimeSeconds;
   final int sessionCount;
-  final List<_DailyPlay> days;
-  final List<Game> topGames;
-  final List<PlaySession> recentSessions;
+  final Map<DateTime, int> daily;
+  final List<_RangeGame> topGames;
+  final List<PlaySession> recent;
   final Game? Function(int? id) gameFor;
 }
-
-bool _sameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;

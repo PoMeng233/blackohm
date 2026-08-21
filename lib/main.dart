@@ -13,6 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await windowManager.ensureInitialized();
+  await windowManager.setAsFrameless();
 
   final windowOptions = const WindowOptions(
     size: Size(1080, 720),

@@ -7,6 +7,28 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // A named session-scoped mutex prevents duplicate Flutter engines, watcher
+  // isolates, tray icons, and SQLite writers from being created.
+  HANDLE single_instance_mutex = CreateMutexW(
+      nullptr, TRUE, L"Local\\BlackOhm.SingleInstance");
+  if (single_instance_mutex == nullptr) {
+    return EXIT_FAILURE;
+  }
+  if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND existing = FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"blackohm");
+    if (existing != nullptr) {
+      if (IsIconic(existing)) {
+        ShowWindow(existing, SW_RESTORE);
+      } else {
+        ShowWindow(existing, SW_SHOW);
+      }
+      BringWindowToTop(existing);
+      SetForegroundWindow(existing);
+    }
+    CloseHandle(single_instance_mutex);
+    return EXIT_SUCCESS;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -38,6 +60,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
+  CloseHandle(single_instance_mutex);
   ::CoUninitialize();
   return EXIT_SUCCESS;
 }

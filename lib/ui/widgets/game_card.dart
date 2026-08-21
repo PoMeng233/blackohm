@@ -12,6 +12,7 @@ class GameCard extends StatefulWidget {
     required this.game,
     required this.activeState,
     required this.onLaunch,
+    required this.onOpenDirectory,
     required this.onOpenDetail,
     required this.onDelete,
     required this.onToggleFavorite,
@@ -21,6 +22,7 @@ class GameCard extends StatefulWidget {
   final Game game;
   final TrackingPublicState activeState;
   final VoidCallback onLaunch;
+  final VoidCallback onOpenDirectory;
   final VoidCallback onOpenDetail;
   final VoidCallback onDelete;
   final VoidCallback onToggleFavorite;
@@ -174,7 +176,11 @@ class _GameCardState extends State<GameCard>
                     ),
                   ),
                 ] else ...[
-                  Icon(Icons.schedule, size: 12, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.schedule,
+                    size: 12,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -213,6 +219,34 @@ class _GameCardState extends State<GameCard>
                     padding: EdgeInsets.only(left: 4),
                     child: Icon(Icons.star, color: Colors.amber, size: 13),
                   ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: '运行文件',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: AppColors.accent,
+                    size: 18,
+                  ),
+                  onPressed: widget.onLaunch,
+                ),
+                IconButton(
+                  tooltip: '打开游戏目录',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.folder_open_rounded,
+                    color: AppColors.textSecondary,
+                    size: 17,
+                  ),
+                  onPressed: widget.onOpenDirectory,
+                ),
               ],
             ),
           ],

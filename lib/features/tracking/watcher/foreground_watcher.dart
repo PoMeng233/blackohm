@@ -55,13 +55,22 @@ void _watcherMain(_WatcherConfig config) {
   late final NativeCallable<w.WndProcNative> wndProcCb;
 
   var lastHwnd = -1;
+  var lastPid = -1;
+  String? lastPath;
+  var lastVisible = false;
   var locked = false;
   var suspended = false;
 
+  void invalidateSnapshot() {
+    lastHwnd = -1;
+    lastPid = -1;
+    lastPath = null;
+    lastVisible = false;
+  }
+
   void emitSnapshot(int hwnd) {
-    if (hwnd == lastHwnd) return;
-    lastHwnd = hwnd;
     if (hwnd == 0) {
+      invalidateSnapshot();
       reply.send(
         const ForegroundSnapshot(
           hwnd: 0,
@@ -80,17 +89,27 @@ void _watcherMain(_WatcherConfig config) {
       if (hProc != 0) {
         final raw = w.queryProcessImagePath(hProc);
         w.closeHandle(hProc);
-        // 短路径展开 + 标准化后匹配；提权进程拿不到路径则维持 null。
         if (raw != null) imagePath = normalizeExePath(w.getLongPathName(raw));
       }
     }
+    final visible = w.isWindowVisible(hwnd) && !w.isIconic(hwnd);
+    if (hwnd == lastHwnd &&
+        pid == lastPid &&
+        imagePath == lastPath &&
+        visible == lastVisible) {
+      return;
+    }
+    lastHwnd = hwnd;
+    lastPid = pid;
+    lastPath = imagePath;
+    lastVisible = visible;
     reply.send(
       ForegroundSnapshot(
         hwnd: hwnd,
         pid: pid,
         imagePath: imagePath,
         windowTitle: w.windowText(hwnd),
-        visible: w.isWindowVisible(hwnd) && !w.isIconic(hwnd),
+        visible: visible,
       ),
     );
   }
@@ -125,16 +144,21 @@ void _watcherMain(_WatcherConfig config) {
           reply.send(const SystemLocked());
         } else if (wParam == w.wtsSessionUnlock) {
           locked = false;
+          invalidateSnapshot();
           reply.send(const SystemUnlocked());
+          emitSnapshot(w.getForegroundWindow());
         }
         return 0;
       case w.wmPowerBroadcast:
         if (wParam == w.pbtApmSuspend) {
           suspended = true;
           reply.send(const SystemSuspend());
-        } else if (wParam == w.pbtApmResumeAutomatic) {
+        } else if (wParam == w.pbtApmResumeSuspend ||
+            wParam == w.pbtApmResumeAutomatic) {
           suspended = false;
+          invalidateSnapshot();
           reply.send(const SystemResumed());
+          emitSnapshot(w.getForegroundWindow());
         }
         return 1;
       case w.wmClose:

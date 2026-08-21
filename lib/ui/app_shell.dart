@@ -147,93 +147,169 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     return DropOverlay(
       onDropped: _onDropped,
       child: Scaffold(
-        body: Row(
+        body: Column(
           children: [
-            // 现代极简侧边栏
-            Container(
-              width: 72,
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                border: Border(right: BorderSide(color: AppColors.border)),
-              ),
-              child: Column(
+            _titleBar(),
+            Expanded(
+              child: Row(
                 children: [
-                  const SizedBox(height: 16),
-                  // Logo 呼吸灯点
+                  // 现代极简侧边栏
                   Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceActive,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.accent),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.bolt,
-                        color: AppColors.accent,
-                        size: 22,
+                    width: 72,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(
+                        right: BorderSide(color: AppColors.border),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _navButton(
-                    icon: Icons.grid_view_rounded,
-                    label: '游戏库',
-                    index: 0,
-                  ),
-                  const SizedBox(height: 8),
-                  _navButton(
-                    icon: Icons.query_stats_rounded,
-                    label: '时长',
-                    index: 1,
-                  ),
-                  const SizedBox(height: 8),
-                  _navButton(icon: Icons.tune_rounded, label: '设置', index: 2),
-                  const Spacer(),
-                  // 底部状态小绿点（引擎常驻守护）
-                  Consumer(
-                    builder: (_, ref, _) {
-                      final active =
-                          ref.watch(trackingStateProvider).value?.isActive ??
-                          false;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Tooltip(
-                          message: active ? '正在前台计时' : '后台守护中 (0% CPU)',
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? AppColors.accent
-                                  : AppColors.textMuted,
-                              shape: BoxShape.circle,
-                              boxShadow: active
-                                  ? const [
-                                      BoxShadow(
-                                        color: AppColors.accentGlow,
-                                        blurRadius: 8,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceActive,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.accent),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.bolt,
+                              color: AppColors.accent,
+                              size: 22,
                             ),
                           ),
                         ),
-                      );
-                    },
+                        const SizedBox(height: 24),
+                        _navButton(
+                          icon: Icons.grid_view_rounded,
+                          label: '游戏库',
+                          index: 0,
+                        ),
+                        const SizedBox(height: 8),
+                        _navButton(
+                          icon: Icons.query_stats_rounded,
+                          label: '时长',
+                          index: 1,
+                        ),
+                        const SizedBox(height: 8),
+                        _navButton(
+                          icon: Icons.tune_rounded,
+                          label: '设置',
+                          index: 2,
+                        ),
+                        const Spacer(),
+                        Consumer(
+                          builder: (_, ref, _) {
+                            final active =
+                                ref
+                                    .watch(trackingStateProvider)
+                                    .value
+                                    ?.isActive ??
+                                false;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Tooltip(
+                                message: active ? '正在前台计时' : '后台守护中',
+                                child: Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? AppColors.accent
+                                        : AppColors.textMuted,
+                                    shape: BoxShape.circle,
+                                    boxShadow: active
+                                        ? const [
+                                            BoxShadow(
+                                              color: AppColors.accentGlow,
+                                              blurRadius: 8,
+                                              spreadRadius: 2,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _navIndex,
+                      children: const [
+                        LibraryPage(),
+                        InsightsPage(),
+                        SettingsPage(),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            // 主视图
-            Expanded(
-              child: IndexedStack(
-                index: _navIndex,
-                children: const [LibraryPage(), InsightsPage(), SettingsPage()],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _titleBar() {
+    return DragToMoveArea(
+      child: Container(
+        height: 46,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceActive,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(color: AppColors.accent),
+              ),
+              child: const Icon(Icons.bolt, color: AppColors.accent, size: 15),
+            ),
+            const SizedBox(width: 9),
+            const Text(
+              'BlackOhm',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const Spacer(),
+            IconButton(
+              tooltip: '最小化',
+              onPressed: windowManager.minimize,
+              icon: const Icon(Icons.remove_rounded, size: 18),
+            ),
+            IconButton(
+              tooltip: '最大化/还原',
+              onPressed: () async {
+                if (await windowManager.isMaximized()) {
+                  await windowManager.unmaximize();
+                } else {
+                  await windowManager.maximize();
+                }
+              },
+              icon: const Icon(Icons.crop_square_rounded, size: 17),
+            ),
+            IconButton(
+              tooltip: '关闭到托盘',
+              onPressed: windowManager.close,
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+            const SizedBox(width: 8),
           ],
         ),
       ),

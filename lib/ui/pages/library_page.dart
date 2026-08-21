@@ -41,6 +41,24 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     super.dispose();
   }
 
+  Future<void> _launchGame(Game game, LaunchService launcher) async {
+    final ok = await launcher.launch(game, ref.read(settingsProvider));
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('运行文件失败，请检查路径或 Locale Emulator 配置')),
+      );
+    }
+  }
+
+  Future<void> _openGameDirectory(Game game, LaunchService launcher) async {
+    final ok = await launcher.openGameDirectory(game);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('游戏目录不存在或无法打开')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gameListProvider);
@@ -168,7 +186,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 180,
-                    mainAxisExtent: 160,
+                    mainAxisExtent: 190,
                     crossAxisSpacing: 14,
                     mainAxisSpacing: 14,
                   ),
@@ -179,10 +197,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       child: GameCard(
                         game: g,
                         activeState: activeState,
-                        onLaunch: () async {
-                          final settings = ref.read(settingsProvider);
-                          await launcher.launch(g, settings);
-                        },
+                        onLaunch: () => _launchGame(g, launcher),
+                        onOpenDirectory: () => _openGameDirectory(g, launcher),
                         onOpenDetail: () => showDialog<void>(
                           context: context,
                           builder: (_) => GameDetailDialog(game: g),
@@ -297,15 +313,22 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               ),
                             const SizedBox(width: 12),
                             IconButton(
+                              tooltip: '运行文件',
                               icon: const Icon(
                                 Icons.play_arrow,
                                 color: AppColors.accent,
                                 size: 20,
                               ),
-                              onPressed: () {
-                                final settings = ref.read(settingsProvider);
-                                launcher.launch(g, settings);
-                              },
+                              onPressed: () => _launchGame(g, launcher),
+                            ),
+                            IconButton(
+                              tooltip: '打开游戏目录',
+                              icon: const Icon(
+                                Icons.folder_open_rounded,
+                                color: AppColors.textSecondary,
+                                size: 19,
+                              ),
+                              onPressed: () => _openGameDirectory(g, launcher),
                             ),
                           ],
                         ),
