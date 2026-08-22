@@ -201,8 +201,20 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
             ),
             const SizedBox(height: 18),
             _SectionCard(
-              title: _chart == InsightsChart.heatmap ? '前台游玩热图' : '每日游玩时长',
-              subtitle: '${_rangeLabel(_range)} · 每格/每柱代表一个自然日',
+              title: _chart == InsightsChart.heatmap
+                  ? '前台游玩热图'
+                  : (_range == InsightsRange.quarter
+                        ? '每周游玩时长'
+                        : (_range == InsightsRange.year
+                              ? '每月游玩时长'
+                              : '每日游玩时长')),
+              subtitle: _chart == InsightsChart.heatmap
+                  ? '${_rangeLabel(_range)} · 每格代表一个自然日'
+                  : (_range == InsightsRange.quarter
+                        ? '本季度 · 每柱代表一个自然周'
+                        : (_range == InsightsRange.year
+                              ? '本年度 · 每柱代表一个自然月'
+                              : '最近 30 天 · 每柱代表一个自然日')),
               child: _chart == InsightsChart.heatmap
                   ? _ActivityHeatmap(
                       start: bounds.start,
@@ -213,7 +225,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                       start: bounds.start,
                       end: bounds.end,
                       daily: model.daily,
-                      monthly: _range == InsightsRange.year,
+                      range: _range,
                     ),
             ),
             const SizedBox(height: 18),
@@ -441,31 +453,67 @@ class _DailyBarChart extends StatelessWidget {
     required this.start,
     required this.end,
     required this.daily,
-    required this.monthly,
+    required this.range,
   });
   final DateTime start;
   final DateTime end;
   final Map<DateTime, int> daily;
-  final bool monthly;
+  final InsightsRange range;
 
   @override
   Widget build(BuildContext context) {
     final buckets = <DateTime, int>{};
-    for (
+    final labels = <DateTime, String>{};
+
+    if (range == InsightsRange.quarter) {
+      // 按周聚合：以周一为一周起始
       var date = start;
-      date.isBefore(end);
-      date = date.add(const Duration(days: 1))
-    ) {
-      final day = DateTime(date.year, date.month, date.day);
-      final key = monthly ? DateTime(day.year, day.month) : day;
-      buckets[key] = (buckets[key] ?? 0) + (daily[day] ?? 0);
+      var weekIndex = 1;
+      while (date.isBefore(end)) {
+        final day = DateTime(date.year, date.month, date.day);
+        final weekStart = day.subtract(Duration(days: day.weekday - 1));
+        if (!buckets.containsKey(weekStart)) {
+          buckets[weekStart] = 0;
+          labels[weekStart] = 'W$weekIndex\n${weekStart.month}/${weekStart.day}';
+          weekIndex++;
+        }
+        buckets[weekStart] = (buckets[weekStart] ?? 0) + (daily[day] ?? 0);
+        date = date.add(const Duration(days: 1));
+      }
+    } else if (range == InsightsRange.year) {
+      for (
+        var date = start;
+        date.isBefore(end);
+        date = date.add(const Duration(days: 1))
+      ) {
+        final day = DateTime(date.year, date.month, date.day);
+        final key = DateTime(day.year, day.month);
+        buckets[key] = (buckets[key] ?? 0) + (daily[day] ?? 0);
+        labels[key] = '${key.year}/${key.month}';
+      }
+    } else {
+      for (
+        var date = start;
+        date.isBefore(end);
+        date = date.add(const Duration(days: 1))
+      ) {
+        final day = DateTime(date.year, date.month, date.day);
+        buckets[day] = (buckets[day] ?? 0) + (daily[day] ?? 0);
+        labels[day] = '${day.month}/${day.day}';
+      }
     }
+
     final entries = buckets.entries.toList(growable: false);
     final maxSeconds = entries.fold<int>(
       0,
       (max, entry) => math.max(max, entry.value),
     );
     final primary = Theme.of(context).colorScheme.primary;
+    final isCompact = range == InsightsRange.month;
+    final barWidth = range == InsightsRange.quarter
+        ? 34.0
+        : (range == InsightsRange.year ? 42.0 : 22.0);
+
     return SizedBox(
       height: 190,
       child: SingleChildScrollView(
@@ -475,18 +523,16 @@ class _DailyBarChart extends StatelessWidget {
           children: entries
               .map((entry) {
                 final ratio = maxSeconds == 0 ? 0.0 : entry.value / maxSeconds;
-                final label = monthly
-                    ? '${entry.key.year}/${entry.key.month}'
-                    : '${entry.key.month}/${entry.key.day}';
+                final label = labels[entry.key] ?? '${entry.key.month}/${entry.key.day}';
                 return Tooltip(
                   message: '$label\n${formatPlayDuration(entry.value)}',
                   child: Container(
-                    width: monthly ? 42 : 22,
+                    width: barWidth,
                     margin: const EdgeInsets.only(right: 6),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (entry.value > 0 && !monthly)
+                        if (entry.value > 0 && isCompact)
                           Text(
                             formatPlayDuration(entry.value),
                             maxLines: 1,
@@ -498,7 +544,7 @@ class _DailyBarChart extends StatelessWidget {
                           ),
                         const SizedBox(height: 4),
                         Container(
-                          height: math.max(4.0, ratio * 125),
+                          height: math.max(4.0, ratio * 120),
                           decoration: BoxDecoration(
                             color: _heatColor(entry.value, maxSeconds, primary),
                             borderRadius: const BorderRadius.vertical(
@@ -509,6 +555,7 @@ class _DailyBarChart extends StatelessWidget {
                         const SizedBox(height: 7),
                         Text(
                           label,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 9,

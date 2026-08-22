@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app_constants.dart';
 import 'core/database/app_database.dart';
+import 'data/folder_repository.dart';
 import 'data/game_repository.dart';
 import 'data/session_repository.dart';
 import 'data/settings_repository.dart';
@@ -37,9 +38,17 @@ final settingsRepoProvider = Provider<SettingsRepository>(
   (ref) => SettingsRepository(ref.watch(databaseProvider)),
 );
 
+final folderRepoProvider = Provider<FolderRepository>(
+  (ref) => FolderRepository(ref.watch(databaseProvider)),
+);
+
 // ── 游戏库视图 ────────────────────────────────────────────────
 final gameListProvider = StreamProvider<List<Game>>(
   (ref) => ref.watch(gameRepoProvider).watchAll(),
+);
+
+final folderListProvider = StreamProvider<List<GameFolder>>(
+  (ref) => ref.watch(folderRepoProvider).watchAll(),
 );
 
 final recentGamesProvider = StreamProvider<List<Game>>(
@@ -116,11 +125,12 @@ class AppSettingsState {
 class SettingsController extends StateNotifier<AppSettingsState> {
   SettingsController(this._repo, this._engine)
     : super(const AppSettingsState()) {
-    _load();
+    loadFuture = _load();
   }
 
   final SettingsRepository _repo;
   final TrackingEngine _engine;
+  late final Future<void> loadFuture;
 
   Future<void> _load() async {
     final lePath = await _repo.get(SettingsKeys.leProcPath);

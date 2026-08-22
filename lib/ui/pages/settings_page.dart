@@ -42,6 +42,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     super.dispose();
   }
 
+  void _syncControllers(AppSettingsState s) {
+    if (_lePathCtrl.text != s.leProcPath) {
+      _lePathCtrl.text = s.leProcPath;
+    }
+    if (_leArgsCtrl.text != s.leArgsTemplate) {
+      _leArgsCtrl.text = s.leArgsTemplate;
+    }
+    if (_leProfileCtrl.text != s.leProfile) {
+      _leProfileCtrl.text = s.leProfile;
+    }
+    if (_bangumiTokenCtrl.text != s.bangumiToken) {
+      _bangumiTokenCtrl.text = s.bangumiToken;
+    }
+  }
+
   Future<void> _pickLeProc() async {
     final res = await FilePicker.pickFiles(
       dialogTitle: '选择 LEProc.exe 所在路径',
@@ -57,6 +72,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AppSettingsState>(
+      settingsProvider,
+      (prev, next) => _syncControllers(next),
+    );
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 

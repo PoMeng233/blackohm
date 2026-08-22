@@ -115,18 +115,28 @@ GetForegroundWindow → snapshot（仅 HWND 变化时发消息）
 
 ```text
 Games
-  id                  INTEGER PK
-  title               TEXT
-  exe_path            TEXT UNIQUE（标准化路径）
-  dir_path            TEXT
-  icon_png            BLOB nullable
-  launch_args         TEXT
-  use_locale_emulator BOOLEAN
-  le_profile          TEXT
-  created_at          DATETIME
-  last_played_at      DATETIME nullable
-  total_play_seconds  INTEGER（用于库页面的反规范化缓存）
-  favorite            BOOLEAN
+  id                      INTEGER PK
+  title                   TEXT
+  exe_path                TEXT UNIQUE（标准化路径）
+  dir_path                TEXT
+  icon_png                BLOB nullable
+  background_path         TEXT nullable（原背景缓存）
+  detail_background_path  TEXT nullable（预生成模糊详情背景）
+  launch_args             TEXT
+  use_locale_emulator     BOOLEAN
+  le_profile              TEXT
+  created_at              DATETIME
+  last_played_at          DATETIME nullable
+  total_play_seconds      INTEGER（用于库页面的反规范化缓存）
+  favorite                BOOLEAN
+  folder_id               INTEGER nullable FK → GameFolders.id
+
+GameFolders
+  id                     INTEGER PK
+  name                   TEXT
+  sort_order             INTEGER
+  include_in_total_time  BOOLEAN（是否参与主页累计时长排序）
+  created_at             DATETIME
 
 PlaySessions
   id                INTEGER PK
@@ -211,6 +221,9 @@ Windows foreground HWND ─┴→ QueryFullProcessImageNameW(game.exe)
 | 窗口关闭 | 默认 hide-to-tray，Flutter 窗口不销毁，监控持续运行 |
 | 扫描游戏目录 | 独立 Isolate，BFS 深度/数量上限，完成后 Isolate 回收 |
 | 解析图标与版本信息 | 独立 Isolate 批处理，不占 UI 线程 |
+| 详情背景模糊 | 导入时生成 960×900 磁盘派生图；详情页仅解码小图与静态渐变，不使用实时滤镜 |
+
+背景原图存于应用支持目录；模糊派生图与原图同时在更换或清除背景时删除。既有原图在首次打开详情页时才异步补建派生缓存，并在生成完成前回退到原图与静态渐变。
 
 ### 7.3 建议的发布验收
 

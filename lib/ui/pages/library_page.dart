@@ -1,6 +1,7 @@
-/// 游戏库视图：支持搜索、网格/列表双视图、收藏过滤、直启与详情。
+/// 游戏库视图：支持搜索、网格/列表双视图、文件夹归类与拖拽、收藏过滤、直启与详情。
 library;
 
+import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../features/scanner/ingestion_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
 import '../widgets/exe_decision_dialog.dart';
+import '../widgets/folder_card.dart';
 import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 
@@ -33,6 +35,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   bool _onlyFavorites = false;
   String _searchQuery = '';
   bool _adding = false;
+
+  /// 当前选中的文件夹 ID：null 表示“全部”；-1 表示“未分类”；>= 0 为具体文件夹 ID
+  int? _selectedFolderId;
 
   @override
   void initState() {
@@ -122,11 +127,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       }
       if (!mounted) return;
       final message = report.added.isNotEmpty
-          ? '已添加 ${report.added.length} 款游戏'
-          : report.pendingDecisions.isNotEmpty
-          ? '请选择主运行文件'
-          : report.duplicatePaths.isNotEmpty
-          ? '该游戏已经在库中'
+          ? '成功入库 ${report.added.length} 款游戏'
           : '未找到有效的游戏运行文件';
       ScaffoldMessenger.of(
         context,
@@ -136,9 +137,387 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
+  Future<void> _createFolderDialog() async {
+    final nameCtrl = TextEditingController();
+    var includeInTotalTime = false;
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('新建文件夹'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '文件夹名称',
+                  hintText: '如：全通、神作、待推',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('参与主页累计时长排行', style: TextStyle(fontSize: 13)),
+                subtitle: const Text(
+                  '开启后按文件夹成员总时长参与“全部游戏”的累计时长排序',
+                  style: TextStyle(fontSize: 11),
+                ),
+                value: includeInTotalTime,
+                onChanged: (v) => setDialogState(() => includeInTotalTime = v),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  '文件夹成员仍会正常记录个人时长；该开关只影响主页的累计时长排序。',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (created == true && nameCtrl.text.trim().isNotEmpty) {
+      await ref
+          .read(folderRepoProvider)
+          .create(nameCtrl.text.trim(), includeInTotalTime: includeInTotalTime);
+    }
+  }
+
+  Future<void> _editFolderDialog(GameFolder folder) async {
+    final nameCtrl = TextEditingController(text: folder.name);
+    final games = ref.read(gameListProvider).valueOrNull ?? const <Game>[];
+    final members = games.where((game) => game.folderId == folder.id).toList();
+    final totalSeconds = members.fold<int>(
+      0,
+      (total, game) => total + game.totalPlaySeconds,
+    );
+    var includeInTotalTime = folder.includeInTotalTime;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('编辑文件夹'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceHover,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.folder_copy_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${members.length} 款游戏 · 成员累计 ${formatPlayDuration(totalSeconds)}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '文件夹名称'),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('参与主页累计时长排行', style: TextStyle(fontSize: 13)),
+                subtitle: const Text(
+                  '开启后按文件夹成员总时长参与“全部游戏”的累计时长排序',
+                  style: TextStyle(fontSize: 11),
+                ),
+                value: includeInTotalTime,
+                onChanged: (v) => setDialogState(() => includeInTotalTime = v),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  '文件夹成员仍会正常记录个人时长；该开关只影响主页的累计时长排序。',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'delete'),
+              child: const Text('删除', style: TextStyle(color: AppColors.error)),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'save'),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == 'save') {
+      final name = nameCtrl.text.trim();
+      if (name.isEmpty) return;
+      await ref
+          .read(folderRepoProvider)
+          .update(
+            folder.id,
+            GameFoldersCompanion(
+              name: Value(name),
+              includeInTotalTime: Value(includeInTotalTime),
+            ),
+          );
+    } else if (result == 'delete') {
+      await _confirmDeleteFolder(folder);
+    }
+  }
+
+  Future<void> _moveGameToFolder(Game game, int? folderId, String label) async {
+    if (game.folderId == folderId) return;
+    await ref
+        .read(gameRepoProvider)
+        .update(game.id, GamesCompanion(folderId: Value(folderId)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已将 "${game.title}" 移至 "$label"'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteFolder(GameFolder folder) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除文件夹？'),
+        content: Text('“${folder.name}”中的游戏会转为未分类。游戏条目、游玩记录和本地游戏文件均不会被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除文件夹'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(folderRepoProvider).delete(folder.id);
+    if (_selectedFolderId == folder.id && mounted) {
+      setState(() => _selectedFolderId = null);
+    }
+  }
+
+  Future<void> _showFolderContextMenu(
+    GameFolder folder,
+    TapUpDetails details,
+  ) async {
+    final offset = details.globalPosition;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy,
+        offset.dx + 1,
+        offset.dy + 1,
+      ),
+      color: AppColors.surfaceActive,
+      items: const [
+        PopupMenuItem(
+          value: 'settings',
+          child: Row(
+            children: [
+              Icon(Icons.settings_outlined, size: 18),
+              SizedBox(width: 8),
+              Text('文件夹设置'),
+            ],
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+              SizedBox(width: 8),
+              Text('删除文件夹', style: TextStyle(color: AppColors.error)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (!mounted) return;
+    if (action == 'settings') {
+      await _editFolderDialog(folder);
+    } else if (action == 'delete') {
+      await _confirmDeleteFolder(folder);
+    }
+  }
+
+  Widget _buildFolderTabs(List<GameFolder> folders) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _folderChip(
+            label: '全部游戏',
+            isSelected: _selectedFolderId == null,
+            onTap: () => setState(() => _selectedFolderId = null),
+          ),
+          const SizedBox(width: 8),
+          _folderChip(
+            label: '未分类',
+            isSelected: _selectedFolderId == -1,
+            targetFolderId: -1,
+            onTap: () => setState(() => _selectedFolderId = -1),
+          ),
+          const SizedBox(width: 8),
+          ...folders.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _folderChip(
+                label: f.name,
+                isSelected: _selectedFolderId == f.id,
+                targetFolderId: f.id,
+                includeInTotal: f.includeInTotalTime,
+                onTap: () => setState(() => _selectedFolderId = f.id),
+                onLongPress: () => _editFolderDialog(f),
+                onSecondaryTapUp: (details) =>
+                    _showFolderContextMenu(f, details),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: '新建文件夹',
+            icon: const Icon(Icons.create_new_folder_outlined, size: 20),
+            onPressed: _createFolderDialog,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _folderChip({
+    required String label,
+    required bool isSelected,
+    int? targetFolderId,
+    bool includeInTotal = false,
+    required VoidCallback onTap,
+    VoidCallback? onLongPress,
+    GestureTapUpCallback? onSecondaryTapUp,
+  }) {
+    final primary = Theme.of(context).colorScheme.primary;
+    Widget chip({bool isHovered = false}) => InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isHovered
+              ? primary.withAlpha(40)
+              : (isSelected ? primary.withAlpha(28) : AppColors.surface),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isHovered
+                ? primary
+                : (isSelected ? primary : AppColors.border),
+            width: isHovered || isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              targetFolderId == null
+                  ? Icons.apps_rounded
+                  : (targetFolderId == -1
+                        ? Icons.inbox_rounded
+                        : Icons.folder_rounded),
+              size: 15,
+              color: isSelected ? primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primary : AppColors.textPrimary,
+              ),
+            ),
+            if (includeInTotal &&
+                targetFolderId != null &&
+                targetFolderId != -1) ...[
+              const SizedBox(width: 4),
+              Tooltip(
+                message: '已启用累计时长统计',
+                child: Icon(Icons.timer_outlined, size: 12, color: primary),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    // “全部游戏”只是筛选视图；不接受拖拽，避免误把游戏移为未分类。
+    if (targetFolderId == null) return chip();
+    return DragTarget<Game>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.folderId !=
+          (targetFolderId == -1 ? null : targetFolderId),
+      onAcceptWithDetails: (details) => _moveGameToFolder(
+        details.data,
+        targetFolderId == -1 ? null : targetFolderId,
+        label,
+      ),
+      builder: (context, candidateData, rejectedData) =>
+          chip(isHovered: candidateData.isNotEmpty),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gameListProvider);
+    final foldersAsync = ref.watch(folderListProvider);
     final activeGameId = ref.watch(
       trackingStateProvider.select((value) => value.valueOrNull?.gameId ?? 0),
     );
@@ -146,9 +525,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
     return Column(
       children: [
-        // 顶部工具栏：搜索 + 收藏过滤 + 网格/列表切换
+        // 顶部工具栏：搜索 + 排序 + 收藏过滤 + 网格/列表切换
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -254,6 +633,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ],
           ),
         ),
+
+        // 文件夹分类栏
+        foldersAsync.when(
+          data: _buildFolderTabs,
+          loading: () => const SizedBox(height: 38),
+          error: (_, _) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 6),
+
         // 游戏库内容区
         Expanded(
           child: gamesAsync.when(
@@ -265,12 +653,27 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               ),
             ),
             data: (games) {
+              final folders = foldersAsync.valueOrNull ?? const [];
+
+              // 过滤文件夹
               var filtered = games.where((g) {
                 if (_onlyFavorites && !g.favorite) return false;
+                if (_selectedFolderId == null || _selectedFolderId == -1) {
+                  // 首页仅展示文件夹入口与未分类游戏，避免成员游戏重复占卡。
+                  if (g.folderId != null) return false;
+                } else if (g.folderId != _selectedFolderId) {
+                  return false;
+                }
                 if (_searchQuery.isEmpty) return true;
                 return g.title.toLowerCase().contains(_searchQuery) ||
                     g.exePath.contains(_searchQuery);
               }).toList();
+
+              // 全库/当前库最大游玩时长（计算横排背景动态比例，最大 3/4）
+              final maxPlaySeconds = games.fold<int>(
+                0,
+                (max, g) => g.totalPlaySeconds > max ? g.totalPlaySeconds : max,
+              );
 
               filtered.sort((a, b) {
                 switch (_sort) {
@@ -279,6 +682,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       b.title.toLowerCase(),
                     );
                   case LibrarySort.totalTime:
+                    // 文件夹内浏览永远按游戏真实时长排序；主页只会显示未分类游戏。
                     return b.totalPlaySeconds.compareTo(a.totalPlaySeconds);
                   case LibrarySort.createdAt:
                     return b.createdAt.compareTo(a.createdAt);
@@ -299,7 +703,32 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 }
               });
 
-              if (filtered.isEmpty) {
+              final folderTotals = <int, int>{
+                for (final folder in folders) folder.id: 0,
+              };
+              for (final game in games) {
+                final folderId = game.folderId;
+                if (folderId != null && folderTotals.containsKey(folderId)) {
+                  folderTotals[folderId] =
+                      (folderTotals[folderId] ?? 0) + game.totalPlaySeconds;
+                }
+              }
+              final folderCards = _selectedFolderId == null
+                  ? [...folders]
+                  : const <GameFolder>[];
+              if (_sort == LibrarySort.totalTime) {
+                folderCards.sort((a, b) {
+                  final aIncluded = a.includeInTotalTime;
+                  final bIncluded = b.includeInTotalTime;
+                  if (aIncluded != bIncluded) return aIncluded ? -1 : 1;
+                  if (!aIncluded) return a.name.compareTo(b.name);
+                  final time = (folderTotals[b.id] ?? 0).compareTo(
+                    folderTotals[a.id] ?? 0,
+                  );
+                  return time != 0 ? time : a.name.compareTo(b.name);
+                });
+              }
+              if (filtered.isEmpty && folderCards.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -332,6 +761,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 );
               }
 
+              // 网格视图
               if (_viewMode == LibraryViewMode.grid) {
                 return GridView.builder(
                   padding: const EdgeInsets.symmetric(
@@ -344,43 +774,87 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     crossAxisSpacing: 14,
                     mainAxisSpacing: 14,
                   ),
-                  itemCount: filtered.length,
+                  itemCount: folderCards.length + filtered.length,
                   itemBuilder: (context, i) {
-                    final g = filtered[i];
-                    return RepaintBoundary(
+                    if (i < folderCards.length) {
+                      final folder = folderCards[i];
+                      final gameCount = games
+                          .where((game) => game.folderId == folder.id)
+                          .length;
+                      return FolderCard(
+                        folder: folder,
+                        gameCount: gameCount,
+                        totalPlaySeconds: folderTotals[folder.id] ?? 0,
+                        onOpen: () =>
+                            setState(() => _selectedFolderId = folder.id),
+                        onMoveGame: (game) =>
+                            _moveGameToFolder(game, folder.id, folder.name),
+                        onShowMenu: (details) =>
+                            _showFolderContextMenu(folder, details),
+                      );
+                    }
+
+                    final g = filtered[i - folderCards.length];
+                    final card = RepaintBoundary(
                       child: GameCard(
                         game: g,
-                        onLaunch: () => _launchGame(g, launcher),
-                        onOpenDirectory: () => _openGameDirectory(g, launcher),
                         onOpenDetail: () => showDialog<void>(
                           context: context,
                           builder: (_) => GameDetailDialog(game: g),
                         ),
-                        onDelete: () => ref.read(gameRepoProvider).delete(g.id),
+                        onLaunch: () => _launchGame(g, launcher),
+                        onOpenDirectory: () => _openGameDirectory(g, launcher),
                         onToggleFavorite: () => ref
                             .read(gameRepoProvider)
                             .update(
                               g.id,
                               GamesCompanion(favorite: Value(!g.favorite)),
                             ),
+                        onDelete: () => ref.read(gameRepoProvider).delete(g.id),
                       ),
+                    );
+                    return Draggable<Game>(
+                      data: g,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: 140,
+                          height: 150,
+                          child: Opacity(opacity: 0.85, child: card),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(opacity: 0.3, child: card),
+                      child: card,
                     );
                   },
                 );
               }
 
-              // 列表视图
+              // 横排/列表视图
               return ListView.separated(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 8,
                 ),
                 itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
                   final g = filtered[i];
                   final isCardActive = activeGameId == g.id;
-                  return Material(
+                  final backgroundPath = g.backgroundPath;
+                  final backgroundFile =
+                      backgroundPath != null && backgroundPath.isNotEmpty
+                      ? File(backgroundPath)
+                      : null;
+                  final hasBackground = backgroundFile != null;
+
+                  // 游玩时长占比：最高占整行 3/4 (0.75) 面积
+                  final ratio = maxPlaySeconds > 0
+                      ? (g.totalPlaySeconds / maxPlaySeconds).clamp(0.0, 1.0)
+                      : 0.0;
+                  final widthFraction = ratio * 0.75;
+
+                  final rowItem = Material(
                     color: isCardActive
                         ? AppColors.surfaceActive
                         : AppColors.surface,
@@ -389,8 +863,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       side: BorderSide(
                         color: g.favorite
                             ? const Color(0xFFFFC857)
-                            : AppColors.border,
-                        width: g.favorite ? 1.5 : 1,
+                            : (isCardActive
+                                  ? context.interactiveColor
+                                  : AppColors.border),
+                        width: g.favorite || isCardActive ? 1.5 : 1,
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -400,104 +876,179 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         context: context,
                         builder: (_) => GameDetailDialog(game: g),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            if (g.iconPng != null)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.memory(
-                                  g.iconPng!,
-                                  width: 28,
-                                  height: 28,
-                                  cacheWidth: 56,
-                                  cacheHeight: 56,
-                                ),
-                              )
-                            else
-                              const Icon(
-                                Icons.videogame_asset,
-                                size: 24,
-                                color: AppColors.textMuted,
-                              ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    g.title,
-                                    style: const TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
+                      child: Stack(
+                        children: [
+                          // 动态面积背景图：从左往右展示，根据游玩时长最多占 3/4，大羽化渐变 + 压暗遮罩保护文字
+                          if (hasBackground && widthFraction > 0.05)
+                            Positioned.fill(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: FractionallySizedBox(
+                                  widthFactor: widthFraction,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.file(
+                                        backgroundFile,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                                      // 压暗与由左至右大羽化渐变蒙层
+                                      DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.centerLeft,
+                                            end: Alignment.centerRight,
+                                            colors: [
+                                              AppColors.bgDark.withAlpha(153),
+                                              AppColors.bgDark.withAlpha(230),
+                                              AppColors.bgDark,
+                                            ],
+                                            stops: [0.0, 0.65, 1.0],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Text(
-                                    g.exePath,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                ),
+                              ),
+                            ),
+                          // 前景内容区
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                if (g.iconPng != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.memory(
+                                      g.iconPng!,
+                                      width: 32,
+                                      height: 32,
+                                      cacheWidth: 64,
+                                      cacheHeight: 64,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceActive,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(
+                                      Icons.videogame_asset,
+                                      size: 20,
                                       color: AppColors.textMuted,
-                                      fontSize: 11,
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            if (isCardActive) ...[
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  shape: BoxShape.circle,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        g.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        g.exePath,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '正在游玩',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                if (isCardActive) ...[
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '正在游玩',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ] else
+                                  Text(
+                                    formatPlayDuration(g.totalPlaySeconds),
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  tooltip: '运行文件',
+                                  icon: Icon(
+                                    Icons.play_arrow,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _launchGame(g, launcher),
                                 ),
-                              ),
-                            ] else
-                              Text(
-                                formatPlayDuration(g.totalPlaySeconds),
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12,
+                                IconButton(
+                                  tooltip: '打开游戏目录',
+                                  icon: const Icon(
+                                    Icons.folder_open_rounded,
+                                    color: AppColors.textSecondary,
+                                    size: 19,
+                                  ),
+                                  onPressed: () =>
+                                      _openGameDirectory(g, launcher),
                                 ),
-                              ),
-                            const SizedBox(width: 12),
-                            IconButton(
-                              tooltip: '运行文件',
-                              icon: Icon(
-                                Icons.play_arrow,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 20,
-                              ),
-                              onPressed: () => _launchGame(g, launcher),
+                              ],
                             ),
-                            IconButton(
-                              tooltip: '打开游戏目录',
-                              icon: const Icon(
-                                Icons.folder_open_rounded,
-                                color: AppColors.textSecondary,
-                                size: 19,
-                              ),
-                              onPressed: () => _openGameDirectory(g, launcher),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
+                  );
+
+                  return Draggable<Game>(
+                    data: g,
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: SizedBox(
+                        width: 320,
+                        child: Opacity(opacity: 0.85, child: rowItem),
+                      ),
+                    ),
+                    childWhenDragging: Opacity(opacity: 0.3, child: rowItem),
+                    child: rowItem,
                   );
                 },
               );

@@ -39,6 +39,9 @@ class Games extends Table {
   /// 背景图的本地缓存路径；不把大图写入 SQLite。
   TextColumn get backgroundPath => text().nullable()();
 
+  /// 详情弹窗专用的低分辨率模糊背景缓存路径。
+  TextColumn get detailBackgroundPath => text().nullable()();
+
   /// 附加启动参数。
   TextColumn get launchArgs => text().withDefault(const Constant(''))();
 
@@ -58,6 +61,28 @@ class Games extends Table {
 
   /// 收藏标记。
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+
+  /// 所属自定义文件夹 ID（为空表示未归类/默认未放入文件夹）。
+  IntColumn get folderId =>
+      integer().nullable().references(GameFolders, #id)();
+}
+
+/// 游戏库自定义文件夹/分类表
+class GameFolders extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// 文件夹名称（如在玩、已玩过、待玩或自定义名称）
+  TextColumn get name => text().withLength(min: 1, max: 128)();
+
+  /// 排序序号
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  /// 是否将该文件夹下的游戏计入游戏库普通排序时的累计时长 / 统计聚合
+  /// 默认不计入时长排序（false），提供选项开启（true）
+  BoolColumn get includeInTotalTime =>
+      boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 连续游玩会话：一次"获得焦点 → 失焦超过 3s"的完整区间，
@@ -90,21 +115,32 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Games, PlaySessions, AppSettings])
+@DriftDatabase(tables: [Games, PlaySessions, AppSettings, GameFolders])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_open());
 
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) => m.createAll(),
+    onCreate: (m) async {
+      await m.createAll();
+      await _seedDefaultFolders();
+    },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.addColumn(games, games.backgroundPath);
+      }
+      if (from < 3) {
+        await m.createTable(gameFolders);
+        await m.addColumn(games, games.folderId);
+        await _seedDefaultFolders();
+      }
+      if (from < 4) {
+        await m.addColumn(games, games.detailBackgroundPath);
       }
     },
     beforeOpen: (details) async {
@@ -113,6 +149,31 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys=ON;');
     },
   );
+
+  Future<void> _seedDefaultFolders() async {
+    final count = await (select(gameFolders)..limit(1)).get();
+    if (count.isEmpty) {
+      await batch((b) {
+        b.insertAll(gameFolders, [
+          GameFoldersCompanion.insert(
+            name: '在玩',
+            sortOrder: const Value(0),
+            includeInTotalTime: const Value(false),
+          ),
+          GameFoldersCompanion.insert(
+            name: '已玩过',
+            sortOrder: const Value(1),
+            includeInTotalTime: const Value(false),
+          ),
+          GameFoldersCompanion.insert(
+            name: '待玩',
+            sortOrder: const Value(2),
+            includeInTotalTime: const Value(false),
+          ),
+        ]);
+      });
+    }
+  }
 
   static LazyDatabase _open() {
     return LazyDatabase(() async {

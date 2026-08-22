@@ -100,13 +100,14 @@ class _GameCardState extends ConsumerState<GameCard> {
                       ),
                     ),
                   if (hasBackground)
-                    const Positioned.fill(
+                    Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
+                          color: Colors.black.withAlpha(90),
+                          gradient: const LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Color(0xE60D0F12)],
+                            colors: [Color(0x330D0F12), Color(0xF20D0F12)],
                           ),
                         ),
                       ),

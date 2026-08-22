@@ -3,6 +3,370 @@
 part of 'app_database.dart';
 
 // ignore_for_file: type=lint
+class $GameFoldersTable extends GameFolders
+    with TableInfo<$GameFoldersTable, GameFolder> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GameFoldersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 128,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _includeInTotalTimeMeta =
+      const VerificationMeta('includeInTotalTime');
+  @override
+  late final GeneratedColumn<bool> includeInTotalTime = GeneratedColumn<bool>(
+    'include_in_total_time',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("include_in_total_time" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    sortOrder,
+    includeInTotalTime,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'game_folders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GameFolder> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('include_in_total_time')) {
+      context.handle(
+        _includeInTotalTimeMeta,
+        includeInTotalTime.isAcceptableOrUnknown(
+          data['include_in_total_time']!,
+          _includeInTotalTimeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GameFolder map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GameFolder(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      includeInTotalTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}include_in_total_time'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $GameFoldersTable createAlias(String alias) {
+    return $GameFoldersTable(attachedDatabase, alias);
+  }
+}
+
+class GameFolder extends DataClass implements Insertable<GameFolder> {
+  final int id;
+
+  /// 文件夹名称（如在玩、已玩过、待玩或自定义名称）
+  final String name;
+
+  /// 排序序号
+  final int sortOrder;
+
+  /// 是否将该文件夹下的游戏计入游戏库普通排序时的累计时长 / 统计聚合
+  /// 默认不计入时长排序（false），提供选项开启（true）
+  final bool includeInTotalTime;
+  final DateTime createdAt;
+  const GameFolder({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.includeInTotalTime,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['include_in_total_time'] = Variable<bool>(includeInTotalTime);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  GameFoldersCompanion toCompanion(bool nullToAbsent) {
+    return GameFoldersCompanion(
+      id: Value(id),
+      name: Value(name),
+      sortOrder: Value(sortOrder),
+      includeInTotalTime: Value(includeInTotalTime),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory GameFolder.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GameFolder(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      includeInTotalTime: serializer.fromJson<bool>(json['includeInTotalTime']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'includeInTotalTime': serializer.toJson<bool>(includeInTotalTime),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  GameFolder copyWith({
+    int? id,
+    String? name,
+    int? sortOrder,
+    bool? includeInTotalTime,
+    DateTime? createdAt,
+  }) => GameFolder(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    sortOrder: sortOrder ?? this.sortOrder,
+    includeInTotalTime: includeInTotalTime ?? this.includeInTotalTime,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  GameFolder copyWithCompanion(GameFoldersCompanion data) {
+    return GameFolder(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      includeInTotalTime: data.includeInTotalTime.present
+          ? data.includeInTotalTime.value
+          : this.includeInTotalTime,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GameFolder(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('includeInTotalTime: $includeInTotalTime, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, sortOrder, includeInTotalTime, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GameFolder &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.sortOrder == this.sortOrder &&
+          other.includeInTotalTime == this.includeInTotalTime &&
+          other.createdAt == this.createdAt);
+}
+
+class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> sortOrder;
+  final Value<bool> includeInTotalTime;
+  final Value<DateTime> createdAt;
+  const GameFoldersCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.includeInTotalTime = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  GameFoldersCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    this.sortOrder = const Value.absent(),
+    this.includeInTotalTime = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : name = Value(name);
+  static Insertable<GameFolder> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? sortOrder,
+    Expression<bool>? includeInTotalTime,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (includeInTotalTime != null)
+        'include_in_total_time': includeInTotalTime,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  GameFoldersCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<int>? sortOrder,
+    Value<bool>? includeInTotalTime,
+    Value<DateTime>? createdAt,
+  }) {
+    return GameFoldersCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
+      includeInTotalTime: includeInTotalTime ?? this.includeInTotalTime,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (includeInTotalTime.present) {
+      map['include_in_total_time'] = Variable<bool>(includeInTotalTime.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GameFoldersCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('includeInTotalTime: $includeInTotalTime, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -79,6 +443,17 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _detailBackgroundPathMeta =
+      const VerificationMeta('detailBackgroundPath');
+  @override
+  late final GeneratedColumn<String> detailBackgroundPath =
+      GeneratedColumn<String>(
+        'detail_background_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _launchArgsMeta = const VerificationMeta(
     'launchArgs',
   );
@@ -168,6 +543,20 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _folderIdMeta = const VerificationMeta(
+    'folderId',
+  );
+  @override
+  late final GeneratedColumn<int> folderId = GeneratedColumn<int>(
+    'folder_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES game_folders (id)',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -176,6 +565,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     dirPath,
     iconPng,
     backgroundPath,
+    detailBackgroundPath,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -183,6 +573,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     lastPlayedAt,
     totalPlaySeconds,
     favorite,
+    folderId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -238,6 +629,15 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         ),
       );
     }
+    if (data.containsKey('detail_background_path')) {
+      context.handle(
+        _detailBackgroundPathMeta,
+        detailBackgroundPath.isAcceptableOrUnknown(
+          data['detail_background_path']!,
+          _detailBackgroundPathMeta,
+        ),
+      );
+    }
     if (data.containsKey('launch_args')) {
       context.handle(
         _launchArgsMeta,
@@ -289,6 +689,12 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         favorite.isAcceptableOrUnknown(data['favorite']!, _favoriteMeta),
       );
     }
+    if (data.containsKey('folder_id')) {
+      context.handle(
+        _folderIdMeta,
+        folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
+      );
+    }
     return context;
   }
 
@@ -322,6 +728,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.string,
         data['${effectivePrefix}background_path'],
       ),
+      detailBackgroundPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_background_path'],
+      ),
       launchArgs: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}launch_args'],
@@ -350,6 +760,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.bool,
         data['${effectivePrefix}favorite'],
       )!,
+      folderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}folder_id'],
+      ),
     );
   }
 
@@ -377,6 +791,9 @@ class Game extends DataClass implements Insertable<Game> {
   /// 背景图的本地缓存路径；不把大图写入 SQLite。
   final String? backgroundPath;
 
+  /// 详情弹窗专用的低分辨率模糊背景缓存路径。
+  final String? detailBackgroundPath;
+
   /// 附加启动参数。
   final String launchArgs;
 
@@ -393,6 +810,9 @@ class Game extends DataClass implements Insertable<Game> {
 
   /// 收藏标记。
   final bool favorite;
+
+  /// 所属自定义文件夹 ID（为空表示未归类/默认未放入文件夹）。
+  final int? folderId;
   const Game({
     required this.id,
     required this.title,
@@ -400,6 +820,7 @@ class Game extends DataClass implements Insertable<Game> {
     required this.dirPath,
     this.iconPng,
     this.backgroundPath,
+    this.detailBackgroundPath,
     required this.launchArgs,
     required this.useLocaleEmulator,
     required this.leProfile,
@@ -407,6 +828,7 @@ class Game extends DataClass implements Insertable<Game> {
     this.lastPlayedAt,
     required this.totalPlaySeconds,
     required this.favorite,
+    this.folderId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -421,6 +843,9 @@ class Game extends DataClass implements Insertable<Game> {
     if (!nullToAbsent || backgroundPath != null) {
       map['background_path'] = Variable<String>(backgroundPath);
     }
+    if (!nullToAbsent || detailBackgroundPath != null) {
+      map['detail_background_path'] = Variable<String>(detailBackgroundPath);
+    }
     map['launch_args'] = Variable<String>(launchArgs);
     map['use_locale_emulator'] = Variable<bool>(useLocaleEmulator);
     map['le_profile'] = Variable<String>(leProfile);
@@ -430,6 +855,9 @@ class Game extends DataClass implements Insertable<Game> {
     }
     map['total_play_seconds'] = Variable<int>(totalPlaySeconds);
     map['favorite'] = Variable<bool>(favorite);
+    if (!nullToAbsent || folderId != null) {
+      map['folder_id'] = Variable<int>(folderId);
+    }
     return map;
   }
 
@@ -445,6 +873,9 @@ class Game extends DataClass implements Insertable<Game> {
       backgroundPath: backgroundPath == null && nullToAbsent
           ? const Value.absent()
           : Value(backgroundPath),
+      detailBackgroundPath: detailBackgroundPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detailBackgroundPath),
       launchArgs: Value(launchArgs),
       useLocaleEmulator: Value(useLocaleEmulator),
       leProfile: Value(leProfile),
@@ -454,6 +885,9 @@ class Game extends DataClass implements Insertable<Game> {
           : Value(lastPlayedAt),
       totalPlaySeconds: Value(totalPlaySeconds),
       favorite: Value(favorite),
+      folderId: folderId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderId),
     );
   }
 
@@ -469,6 +903,9 @@ class Game extends DataClass implements Insertable<Game> {
       dirPath: serializer.fromJson<String>(json['dirPath']),
       iconPng: serializer.fromJson<Uint8List?>(json['iconPng']),
       backgroundPath: serializer.fromJson<String?>(json['backgroundPath']),
+      detailBackgroundPath: serializer.fromJson<String?>(
+        json['detailBackgroundPath'],
+      ),
       launchArgs: serializer.fromJson<String>(json['launchArgs']),
       useLocaleEmulator: serializer.fromJson<bool>(json['useLocaleEmulator']),
       leProfile: serializer.fromJson<String>(json['leProfile']),
@@ -476,6 +913,7 @@ class Game extends DataClass implements Insertable<Game> {
       lastPlayedAt: serializer.fromJson<DateTime?>(json['lastPlayedAt']),
       totalPlaySeconds: serializer.fromJson<int>(json['totalPlaySeconds']),
       favorite: serializer.fromJson<bool>(json['favorite']),
+      folderId: serializer.fromJson<int?>(json['folderId']),
     );
   }
   @override
@@ -488,6 +926,7 @@ class Game extends DataClass implements Insertable<Game> {
       'dirPath': serializer.toJson<String>(dirPath),
       'iconPng': serializer.toJson<Uint8List?>(iconPng),
       'backgroundPath': serializer.toJson<String?>(backgroundPath),
+      'detailBackgroundPath': serializer.toJson<String?>(detailBackgroundPath),
       'launchArgs': serializer.toJson<String>(launchArgs),
       'useLocaleEmulator': serializer.toJson<bool>(useLocaleEmulator),
       'leProfile': serializer.toJson<String>(leProfile),
@@ -495,6 +934,7 @@ class Game extends DataClass implements Insertable<Game> {
       'lastPlayedAt': serializer.toJson<DateTime?>(lastPlayedAt),
       'totalPlaySeconds': serializer.toJson<int>(totalPlaySeconds),
       'favorite': serializer.toJson<bool>(favorite),
+      'folderId': serializer.toJson<int?>(folderId),
     };
   }
 
@@ -505,6 +945,7 @@ class Game extends DataClass implements Insertable<Game> {
     String? dirPath,
     Value<Uint8List?> iconPng = const Value.absent(),
     Value<String?> backgroundPath = const Value.absent(),
+    Value<String?> detailBackgroundPath = const Value.absent(),
     String? launchArgs,
     bool? useLocaleEmulator,
     String? leProfile,
@@ -512,6 +953,7 @@ class Game extends DataClass implements Insertable<Game> {
     Value<DateTime?> lastPlayedAt = const Value.absent(),
     int? totalPlaySeconds,
     bool? favorite,
+    Value<int?> folderId = const Value.absent(),
   }) => Game(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -521,6 +963,9 @@ class Game extends DataClass implements Insertable<Game> {
     backgroundPath: backgroundPath.present
         ? backgroundPath.value
         : this.backgroundPath,
+    detailBackgroundPath: detailBackgroundPath.present
+        ? detailBackgroundPath.value
+        : this.detailBackgroundPath,
     launchArgs: launchArgs ?? this.launchArgs,
     useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
     leProfile: leProfile ?? this.leProfile,
@@ -528,6 +973,7 @@ class Game extends DataClass implements Insertable<Game> {
     lastPlayedAt: lastPlayedAt.present ? lastPlayedAt.value : this.lastPlayedAt,
     totalPlaySeconds: totalPlaySeconds ?? this.totalPlaySeconds,
     favorite: favorite ?? this.favorite,
+    folderId: folderId.present ? folderId.value : this.folderId,
   );
   Game copyWithCompanion(GamesCompanion data) {
     return Game(
@@ -539,6 +985,9 @@ class Game extends DataClass implements Insertable<Game> {
       backgroundPath: data.backgroundPath.present
           ? data.backgroundPath.value
           : this.backgroundPath,
+      detailBackgroundPath: data.detailBackgroundPath.present
+          ? data.detailBackgroundPath.value
+          : this.detailBackgroundPath,
       launchArgs: data.launchArgs.present
           ? data.launchArgs.value
           : this.launchArgs,
@@ -554,6 +1003,7 @@ class Game extends DataClass implements Insertable<Game> {
           ? data.totalPlaySeconds.value
           : this.totalPlaySeconds,
       favorite: data.favorite.present ? data.favorite.value : this.favorite,
+      folderId: data.folderId.present ? data.folderId.value : this.folderId,
     );
   }
 
@@ -566,13 +1016,15 @@ class Game extends DataClass implements Insertable<Game> {
           ..write('dirPath: $dirPath, ')
           ..write('iconPng: $iconPng, ')
           ..write('backgroundPath: $backgroundPath, ')
+          ..write('detailBackgroundPath: $detailBackgroundPath, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
           ..write('createdAt: $createdAt, ')
           ..write('lastPlayedAt: $lastPlayedAt, ')
           ..write('totalPlaySeconds: $totalPlaySeconds, ')
-          ..write('favorite: $favorite')
+          ..write('favorite: $favorite, ')
+          ..write('folderId: $folderId')
           ..write(')'))
         .toString();
   }
@@ -585,6 +1037,7 @@ class Game extends DataClass implements Insertable<Game> {
     dirPath,
     $driftBlobEquality.hash(iconPng),
     backgroundPath,
+    detailBackgroundPath,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -592,6 +1045,7 @@ class Game extends DataClass implements Insertable<Game> {
     lastPlayedAt,
     totalPlaySeconds,
     favorite,
+    folderId,
   );
   @override
   bool operator ==(Object other) =>
@@ -603,13 +1057,15 @@ class Game extends DataClass implements Insertable<Game> {
           other.dirPath == this.dirPath &&
           $driftBlobEquality.equals(other.iconPng, this.iconPng) &&
           other.backgroundPath == this.backgroundPath &&
+          other.detailBackgroundPath == this.detailBackgroundPath &&
           other.launchArgs == this.launchArgs &&
           other.useLocaleEmulator == this.useLocaleEmulator &&
           other.leProfile == this.leProfile &&
           other.createdAt == this.createdAt &&
           other.lastPlayedAt == this.lastPlayedAt &&
           other.totalPlaySeconds == this.totalPlaySeconds &&
-          other.favorite == this.favorite);
+          other.favorite == this.favorite &&
+          other.folderId == this.folderId);
 }
 
 class GamesCompanion extends UpdateCompanion<Game> {
@@ -619,6 +1075,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<String> dirPath;
   final Value<Uint8List?> iconPng;
   final Value<String?> backgroundPath;
+  final Value<String?> detailBackgroundPath;
   final Value<String> launchArgs;
   final Value<bool> useLocaleEmulator;
   final Value<String> leProfile;
@@ -626,6 +1083,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<DateTime?> lastPlayedAt;
   final Value<int> totalPlaySeconds;
   final Value<bool> favorite;
+  final Value<int?> folderId;
   const GamesCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -633,6 +1091,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.dirPath = const Value.absent(),
     this.iconPng = const Value.absent(),
     this.backgroundPath = const Value.absent(),
+    this.detailBackgroundPath = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -640,6 +1099,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.lastPlayedAt = const Value.absent(),
     this.totalPlaySeconds = const Value.absent(),
     this.favorite = const Value.absent(),
+    this.folderId = const Value.absent(),
   });
   GamesCompanion.insert({
     this.id = const Value.absent(),
@@ -648,6 +1108,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     required String dirPath,
     this.iconPng = const Value.absent(),
     this.backgroundPath = const Value.absent(),
+    this.detailBackgroundPath = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -655,6 +1116,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.lastPlayedAt = const Value.absent(),
     this.totalPlaySeconds = const Value.absent(),
     this.favorite = const Value.absent(),
+    this.folderId = const Value.absent(),
   }) : title = Value(title),
        exePath = Value(exePath),
        dirPath = Value(dirPath);
@@ -665,6 +1127,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<String>? dirPath,
     Expression<Uint8List>? iconPng,
     Expression<String>? backgroundPath,
+    Expression<String>? detailBackgroundPath,
     Expression<String>? launchArgs,
     Expression<bool>? useLocaleEmulator,
     Expression<String>? leProfile,
@@ -672,6 +1135,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<DateTime>? lastPlayedAt,
     Expression<int>? totalPlaySeconds,
     Expression<bool>? favorite,
+    Expression<int>? folderId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -680,6 +1144,8 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (dirPath != null) 'dir_path': dirPath,
       if (iconPng != null) 'icon_png': iconPng,
       if (backgroundPath != null) 'background_path': backgroundPath,
+      if (detailBackgroundPath != null)
+        'detail_background_path': detailBackgroundPath,
       if (launchArgs != null) 'launch_args': launchArgs,
       if (useLocaleEmulator != null) 'use_locale_emulator': useLocaleEmulator,
       if (leProfile != null) 'le_profile': leProfile,
@@ -687,6 +1153,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (lastPlayedAt != null) 'last_played_at': lastPlayedAt,
       if (totalPlaySeconds != null) 'total_play_seconds': totalPlaySeconds,
       if (favorite != null) 'favorite': favorite,
+      if (folderId != null) 'folder_id': folderId,
     });
   }
 
@@ -697,6 +1164,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<String>? dirPath,
     Value<Uint8List?>? iconPng,
     Value<String?>? backgroundPath,
+    Value<String?>? detailBackgroundPath,
     Value<String>? launchArgs,
     Value<bool>? useLocaleEmulator,
     Value<String>? leProfile,
@@ -704,6 +1172,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<DateTime?>? lastPlayedAt,
     Value<int>? totalPlaySeconds,
     Value<bool>? favorite,
+    Value<int?>? folderId,
   }) {
     return GamesCompanion(
       id: id ?? this.id,
@@ -712,6 +1181,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       dirPath: dirPath ?? this.dirPath,
       iconPng: iconPng ?? this.iconPng,
       backgroundPath: backgroundPath ?? this.backgroundPath,
+      detailBackgroundPath: detailBackgroundPath ?? this.detailBackgroundPath,
       launchArgs: launchArgs ?? this.launchArgs,
       useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
       leProfile: leProfile ?? this.leProfile,
@@ -719,6 +1189,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
       totalPlaySeconds: totalPlaySeconds ?? this.totalPlaySeconds,
       favorite: favorite ?? this.favorite,
+      folderId: folderId ?? this.folderId,
     );
   }
 
@@ -743,6 +1214,11 @@ class GamesCompanion extends UpdateCompanion<Game> {
     if (backgroundPath.present) {
       map['background_path'] = Variable<String>(backgroundPath.value);
     }
+    if (detailBackgroundPath.present) {
+      map['detail_background_path'] = Variable<String>(
+        detailBackgroundPath.value,
+      );
+    }
     if (launchArgs.present) {
       map['launch_args'] = Variable<String>(launchArgs.value);
     }
@@ -764,6 +1240,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     if (favorite.present) {
       map['favorite'] = Variable<bool>(favorite.value);
     }
+    if (folderId.present) {
+      map['folder_id'] = Variable<int>(folderId.value);
+    }
     return map;
   }
 
@@ -776,13 +1255,15 @@ class GamesCompanion extends UpdateCompanion<Game> {
           ..write('dirPath: $dirPath, ')
           ..write('iconPng: $iconPng, ')
           ..write('backgroundPath: $backgroundPath, ')
+          ..write('detailBackgroundPath: $detailBackgroundPath, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
           ..write('createdAt: $createdAt, ')
           ..write('lastPlayedAt: $lastPlayedAt, ')
           ..write('totalPlaySeconds: $totalPlaySeconds, ')
-          ..write('favorite: $favorite')
+          ..write('favorite: $favorite, ')
+          ..write('folderId: $folderId')
           ..write(')'))
         .toString();
   }
@@ -1362,6 +1843,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
+  late final $GameFoldersTable gameFolders = $GameFoldersTable(this);
   late final $GamesTable games = $GamesTable(this);
   late final $PlaySessionsTable playSessions = $PlaySessionsTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
@@ -1370,12 +1852,307 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
+    gameFolders,
     games,
     playSessions,
     appSettings,
   ];
 }
 
+typedef $$GameFoldersTableCreateCompanionBuilder =
+    GameFoldersCompanion Function({
+      Value<int> id,
+      required String name,
+      Value<int> sortOrder,
+      Value<bool> includeInTotalTime,
+      Value<DateTime> createdAt,
+    });
+typedef $$GameFoldersTableUpdateCompanionBuilder =
+    GameFoldersCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<int> sortOrder,
+      Value<bool> includeInTotalTime,
+      Value<DateTime> createdAt,
+    });
+
+final class $$GameFoldersTableReferences
+    extends BaseReferences<_$AppDatabase, $GameFoldersTable, GameFolder> {
+  $$GameFoldersTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$GamesTable, List<Game>> _gamesRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.games,
+    aliasName: 'game_folders__id__games__folder_id',
+  );
+
+  $$GamesTableProcessedTableManager get gamesRefs {
+    final manager = $$GamesTableTableManager(
+      $_db,
+      $_db.games,
+    ).filter((f) => f.folderId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_gamesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$GameFoldersTableFilterComposer
+    extends Composer<_$AppDatabase, $GameFoldersTable> {
+  $$GameFoldersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get includeInTotalTime => $composableBuilder(
+    column: $table.includeInTotalTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> gamesRefs(
+    Expression<bool> Function($$GamesTableFilterComposer f) f,
+  ) {
+    final $$GamesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.games,
+      getReferencedColumn: (t) => t.folderId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GamesTableFilterComposer(
+            $db: $db,
+            $table: $db.games,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$GameFoldersTableOrderingComposer
+    extends Composer<_$AppDatabase, $GameFoldersTable> {
+  $$GameFoldersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get includeInTotalTime => $composableBuilder(
+    column: $table.includeInTotalTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GameFoldersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GameFoldersTable> {
+  $$GameFoldersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get includeInTotalTime => $composableBuilder(
+    column: $table.includeInTotalTime,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  Expression<T> gamesRefs<T extends Object>(
+    Expression<T> Function($$GamesTableAnnotationComposer a) f,
+  ) {
+    final $$GamesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.games,
+      getReferencedColumn: (t) => t.folderId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GamesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.games,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$GameFoldersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GameFoldersTable,
+          GameFolder,
+          $$GameFoldersTableFilterComposer,
+          $$GameFoldersTableOrderingComposer,
+          $$GameFoldersTableAnnotationComposer,
+          $$GameFoldersTableCreateCompanionBuilder,
+          $$GameFoldersTableUpdateCompanionBuilder,
+          (GameFolder, $$GameFoldersTableReferences),
+          GameFolder,
+          PrefetchHooks Function({bool gamesRefs})
+        > {
+  $$GameFoldersTableTableManager(_$AppDatabase db, $GameFoldersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GameFoldersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GameFoldersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GameFoldersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> includeInTotalTime = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => GameFoldersCompanion(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                includeInTotalTime: includeInTotalTime,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> includeInTotalTime = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => GameFoldersCompanion.insert(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                includeInTotalTime: includeInTotalTime,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$GameFoldersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({gamesRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (gamesRefs) db.games],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (gamesRefs)
+                    await $_getPrefetchedData<
+                      GameFolder,
+                      $GameFoldersTable,
+                      Game
+                    >(
+                      currentTable: table,
+                      referencedTable: $$GameFoldersTableReferences
+                          ._gamesRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$GameFoldersTableReferences(db, table, p0).gamesRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.folderId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$GameFoldersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GameFoldersTable,
+      GameFolder,
+      $$GameFoldersTableFilterComposer,
+      $$GameFoldersTableOrderingComposer,
+      $$GameFoldersTableAnnotationComposer,
+      $$GameFoldersTableCreateCompanionBuilder,
+      $$GameFoldersTableUpdateCompanionBuilder,
+      (GameFolder, $$GameFoldersTableReferences),
+      GameFolder,
+      PrefetchHooks Function({bool gamesRefs})
+    >;
 typedef $$GamesTableCreateCompanionBuilder =
     GamesCompanion Function({
       Value<int> id,
@@ -1384,6 +2161,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       required String dirPath,
       Value<Uint8List?> iconPng,
       Value<String?> backgroundPath,
+      Value<String?> detailBackgroundPath,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -1391,6 +2169,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       Value<DateTime?> lastPlayedAt,
       Value<int> totalPlaySeconds,
       Value<bool> favorite,
+      Value<int?> folderId,
     });
 typedef $$GamesTableUpdateCompanionBuilder =
     GamesCompanion Function({
@@ -1400,6 +2179,7 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<String> dirPath,
       Value<Uint8List?> iconPng,
       Value<String?> backgroundPath,
+      Value<String?> detailBackgroundPath,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -1407,11 +2187,29 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<DateTime?> lastPlayedAt,
       Value<int> totalPlaySeconds,
       Value<bool> favorite,
+      Value<int?> folderId,
     });
 
 final class $$GamesTableReferences
     extends BaseReferences<_$AppDatabase, $GamesTable, Game> {
   $$GamesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GameFoldersTable _folderIdTable(_$AppDatabase db) =>
+      db.gameFolders.createAlias('games__folder_id__game_folders__id');
+
+  $$GameFoldersTableProcessedTableManager? get folderId {
+    final $_column = $_itemColumn<int>('folder_id');
+    if ($_column == null) return null;
+    final manager = $$GameFoldersTableTableManager(
+      $_db,
+      $_db.gameFolders,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_folderIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static MultiTypedResultKey<$PlaySessionsTable, List<PlaySession>>
   _playSessionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -1470,6 +2268,11 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get detailBackgroundPath => $composableBuilder(
+    column: $table.detailBackgroundPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
     builder: (column) => ColumnFilters(column),
@@ -1504,6 +2307,29 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
     column: $table.favorite,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$GameFoldersTableFilterComposer get folderId {
+    final $$GameFoldersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.gameFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GameFoldersTableFilterComposer(
+            $db: $db,
+            $table: $db.gameFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<bool> playSessionsRefs(
     Expression<bool> Function($$PlaySessionsTableFilterComposer f) f,
@@ -1570,6 +2396,11 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get detailBackgroundPath => $composableBuilder(
+    column: $table.detailBackgroundPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
     builder: (column) => ColumnOrderings(column),
@@ -1604,6 +2435,29 @@ class $$GamesTableOrderingComposer
     column: $table.favorite,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$GameFoldersTableOrderingComposer get folderId {
+    final $$GameFoldersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.gameFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GameFoldersTableOrderingComposer(
+            $db: $db,
+            $table: $db.gameFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$GamesTableAnnotationComposer
@@ -1635,6 +2489,11 @@ class $$GamesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get detailBackgroundPath => $composableBuilder(
+    column: $table.detailBackgroundPath,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
     builder: (column) => column,
@@ -1663,6 +2522,29 @@ class $$GamesTableAnnotationComposer
 
   GeneratedColumn<bool> get favorite =>
       $composableBuilder(column: $table.favorite, builder: (column) => column);
+
+  $$GameFoldersTableAnnotationComposer get folderId {
+    final $$GameFoldersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.gameFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GameFoldersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.gameFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<T> playSessionsRefs<T extends Object>(
     Expression<T> Function($$PlaySessionsTableAnnotationComposer a) f,
@@ -1703,7 +2585,7 @@ class $$GamesTableTableManager
           $$GamesTableUpdateCompanionBuilder,
           (Game, $$GamesTableReferences),
           Game,
-          PrefetchHooks Function({bool playSessionsRefs})
+          PrefetchHooks Function({bool folderId, bool playSessionsRefs})
         > {
   $$GamesTableTableManager(_$AppDatabase db, $GamesTable table)
     : super(
@@ -1724,6 +2606,7 @@ class $$GamesTableTableManager
                 Value<String> dirPath = const Value.absent(),
                 Value<Uint8List?> iconPng = const Value.absent(),
                 Value<String?> backgroundPath = const Value.absent(),
+                Value<String?> detailBackgroundPath = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -1731,6 +2614,7 @@ class $$GamesTableTableManager
                 Value<DateTime?> lastPlayedAt = const Value.absent(),
                 Value<int> totalPlaySeconds = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
+                Value<int?> folderId = const Value.absent(),
               }) => GamesCompanion(
                 id: id,
                 title: title,
@@ -1738,6 +2622,7 @@ class $$GamesTableTableManager
                 dirPath: dirPath,
                 iconPng: iconPng,
                 backgroundPath: backgroundPath,
+                detailBackgroundPath: detailBackgroundPath,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,
@@ -1745,6 +2630,7 @@ class $$GamesTableTableManager
                 lastPlayedAt: lastPlayedAt,
                 totalPlaySeconds: totalPlaySeconds,
                 favorite: favorite,
+                folderId: folderId,
               ),
           createCompanionCallback:
               ({
@@ -1754,6 +2640,7 @@ class $$GamesTableTableManager
                 required String dirPath,
                 Value<Uint8List?> iconPng = const Value.absent(),
                 Value<String?> backgroundPath = const Value.absent(),
+                Value<String?> detailBackgroundPath = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -1761,6 +2648,7 @@ class $$GamesTableTableManager
                 Value<DateTime?> lastPlayedAt = const Value.absent(),
                 Value<int> totalPlaySeconds = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
+                Value<int?> folderId = const Value.absent(),
               }) => GamesCompanion.insert(
                 id: id,
                 title: title,
@@ -1768,6 +2656,7 @@ class $$GamesTableTableManager
                 dirPath: dirPath,
                 iconPng: iconPng,
                 backgroundPath: backgroundPath,
+                detailBackgroundPath: detailBackgroundPath,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,
@@ -1775,6 +2664,7 @@ class $$GamesTableTableManager
                 lastPlayedAt: lastPlayedAt,
                 totalPlaySeconds: totalPlaySeconds,
                 favorite: favorite,
+                folderId: folderId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -1782,31 +2672,72 @@ class $$GamesTableTableManager
                     (e.readTable(table), $$GamesTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({playSessionsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (playSessionsRefs) db.playSessions],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (playSessionsRefs)
-                    await $_getPrefetchedData<Game, $GamesTable, PlaySession>(
-                      currentTable: table,
-                      referencedTable: $$GamesTableReferences
-                          ._playSessionsRefsTable(db),
-                      managerFromTypedResult: (p0) => $$GamesTableReferences(
-                        db,
-                        table,
-                        p0,
-                      ).playSessionsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.gameId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({folderId = false, playSessionsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (playSessionsRefs) db.playSessions,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (folderId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.folderId,
+                                    referencedTable: $$GamesTableReferences
+                                        ._folderIdTable(db),
+                                    referencedColumn: $$GamesTableReferences
+                                        ._folderIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (playSessionsRefs)
+                        await $_getPrefetchedData<
+                          Game,
+                          $GamesTable,
+                          PlaySession
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GamesTableReferences
+                              ._playSessionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GamesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).playSessionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.gameId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -1823,7 +2754,7 @@ typedef $$GamesTableProcessedTableManager =
       $$GamesTableUpdateCompanionBuilder,
       (Game, $$GamesTableReferences),
       Game,
-      PrefetchHooks Function({bool playSessionsRefs})
+      PrefetchHooks Function({bool folderId, bool playSessionsRefs})
     >;
 typedef $$PlaySessionsTableCreateCompanionBuilder =
     PlaySessionsCompanion Function({
@@ -2281,6 +3212,8 @@ typedef $$AppSettingsTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
+  $$GameFoldersTableTableManager get gameFolders =>
+      $$GameFoldersTableTableManager(_db, _db.gameFolders);
   $$GamesTableTableManager get games =>
       $$GamesTableTableManager(_db, _db.games);
   $$PlaySessionsTableTableManager get playSessions =>

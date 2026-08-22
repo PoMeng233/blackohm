@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
-import 'data/settings_repository.dart';
 import 'providers.dart';
 
 Future<void> main() async {
@@ -28,11 +27,10 @@ Future<void> main() async {
     await windowManager.setPreventClose(true); // 拦截关闭 → 最小化到托盘
   });
 
-  // 读取 startHidden 设置决定首屏展示/隐藏
+  // 读取 startHidden 设置决定首屏展示/隐藏，并等待设置加载完成
   final container = ProviderContainer();
-  final startHidden = await container
-      .read(settingsRepoProvider)
-      .getBool(SettingsKeys.startHidden);
+  await container.read(settingsProvider.notifier).loadFuture;
+  final startHidden = container.read(settingsProvider).startHidden;
 
   // 内存治理：收紧图像缓存上限（默认 1000 张 / 100 MiB，远超本应用需求），
   // 并尽早启动托盘态工作集修剪服务。

@@ -3,6 +3,10 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
+
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -32,7 +36,72 @@ String normalizeBangumiSearchQuery(String value) {
   return query.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
+/// 从受信任的 Bangumi Subject 页面链接中提取条目 ID。
+/// 仅接受主条目路径，避免把剧集、人物等链接误作游戏封面。
+int? parseBangumiSubjectId(String input) {
+  final uri = Uri.tryParse(input.trim());
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+    return null;
+  }
+  final host = uri.host.toLowerCase();
+  const hosts = {
+    'bgm.tv',
+    'bangumi.tv',
+    'chii.in',
+    'www.bgm.tv',
+    'www.bangumi.tv',
+    'www.chii.in',
+  };
+  if (!hosts.contains(host)) return null;
+  final segments = uri.pathSegments
+      .where((segment) => segment.isNotEmpty)
+      .toList();
+  if (segments.length != 2 || segments.first != 'subject') return null;
+  final id = int.tryParse(segments.last);
+  return id != null && id > 0 ? id : null;
+}
+
+Map<String, Object> buildBangumiSearchPayload(String query) => {
+  'keyword': normalizeBangumiSearchQuery(query),
+  'filter': <String, Object>{
+    'type': <int>[4],
+  },
+  'sort': 'match',
+};
+
 class BangumiImageSearchService {
+  Future<BangumiImageCandidate?> fetchSubject({
+    required int subjectId,
+    required String token,
+  }) async {
+    if (subjectId <= 0 || token.trim().isEmpty) return null;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    try {
+      final request = await client.getUrl(
+        Uri.parse('https://api.bgm.tv/v0/subjects/$subjectId'),
+      );
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
+      final auth = token.trim();
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 12),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+      final body = await response.transform(utf8.decoder).join();
+      return parseBangumiGameSubjectJson(body);
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<List<BangumiImageCandidate>> search({
     required String query,
     required String token,
@@ -54,18 +123,7 @@ class BangumiImageSearchService {
         HttpHeaders.authorizationHeader,
         auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
       );
-      request.write(
-        jsonEncode({
-          'keyword': normalizeBangumiSearchQuery(query),
-          'filter': {
-            'type': [4],
-            // Bangumi 的视觉小说条目大量标记为 NSFW；用户已配置 token，
-            // 官方接口只有在开放该过滤时才会返回这些受限 subject。
-            'nsfw': true,
-          },
-          'sort': 'match',
-        }),
-      );
+      request.write(jsonEncode(buildBangumiSearchPayload(query)));
       final response = await request.close().timeout(
         const Duration(seconds: 12),
       );
@@ -96,6 +154,17 @@ List<BangumiImageCandidate> parseBangumiSubjectsJson(String body) {
   }
 }
 
+/// 解析单个 Subject API 响应，并限制为 Bangumi 游戏条目。
+BangumiImageCandidate? parseBangumiGameSubjectJson(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map || decoded['type'] != 4) return null;
+    return parseBangumiSubject(decoded);
+  } catch (_) {
+    return null;
+  }
+}
+
 BangumiImageCandidate? parseBangumiSubject(Map value) {
   final title = (value['name_cn'] ?? value['name'] ?? '').toString().trim();
   final id = value['id'];
@@ -114,6 +183,45 @@ BangumiImageCandidate? parseBangumiSubject(Map value) {
     imageUrl: image,
     subjectUrl: id == null ? 'https://bgm.tv' : 'https://bgm.tv/subject/$id',
   );
+}
+
+/// 供后台 isolate 生成详情派生图；非法图片返回 null，不影响原背景使用。
+List<int>? createDetailBackgroundBytesForTest(List<int> sourceBytes) =>
+    _createDetailBackgroundBytes(sourceBytes);
+
+List<int>? _createDetailBackgroundBytes(List<int> sourceBytes) {
+  try {
+    final decoded = img.decodeImage(Uint8List.fromList(sourceBytes));
+    if (decoded == null) return null;
+
+    const targetWidth = 960;
+    const targetHeight = 900;
+    final targetRatio = targetWidth / targetHeight;
+    final sourceRatio = decoded.width / decoded.height;
+    final cropWidth = sourceRatio > targetRatio
+        ? (decoded.height * targetRatio).round()
+        : decoded.width;
+    final cropHeight = sourceRatio > targetRatio
+        ? decoded.height
+        : (decoded.width / targetRatio).round();
+    final cropped = img.copyCrop(
+      decoded,
+      x: (decoded.width - cropWidth) ~/ 2,
+      y: (decoded.height - cropHeight) ~/ 2,
+      width: cropWidth,
+      height: cropHeight,
+    );
+    final resized = img.copyResize(
+      cropped,
+      width: targetWidth,
+      height: targetHeight,
+      interpolation: img.Interpolation.average,
+    );
+    final blurred = img.gaussianBlur(resized, radius: 18);
+    return img.encodePng(blurred, level: 6);
+  } catch (_) {
+    return null;
+  }
 }
 
 class BackgroundCacheService {
@@ -168,6 +276,33 @@ class BackgroundCacheService {
       return null;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  /// 以小尺寸派生图实现详情页模糊背景，避免打开弹窗时运行实时滤镜。
+  Future<String?> createDetailBackground(String? sourcePath) async {
+    if (sourcePath == null || sourcePath.isEmpty) return null;
+    final source = File(sourcePath);
+    if (!await source.exists()) return null;
+    final directory = await _directory();
+    final target = File(
+      p.join(
+        directory.path,
+        '${p.basenameWithoutExtension(sourcePath)}.detail-blur-v1.png',
+      ),
+    );
+    if (await target.exists() && await target.length() > 0) return target.path;
+
+    try {
+      final sourceBytes = await source.readAsBytes();
+      final output = await Isolate.run(
+        () => _createDetailBackgroundBytes(sourceBytes),
+      );
+      if (output == null) return null;
+      await target.writeAsBytes(output, flush: true);
+      return target.path;
+    } catch (_) {
+      return null;
     }
   }
 

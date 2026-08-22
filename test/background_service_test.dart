@@ -29,4 +29,66 @@ void main() {
     expect(parseBangumiSubjectsJson('{}'), isEmpty);
     expect(parseBangumiSubjectsJson('not-json'), isEmpty);
   });
+
+  test('识别 Bangumi Subject 链接及常见 URL 变体', () {
+    expect(parseBangumiSubjectId('https://bgm.tv/subject/42'), 42);
+    expect(parseBangumiSubjectId('https://bangumi.tv/subject/42/'), 42);
+    expect(
+      parseBangumiSubjectId('https://www.chii.in/subject/42?from=search#top'),
+      42,
+    );
+    expect(parseBangumiSubjectId('http://www.bgm.tv/subject/114514'), 114514);
+  });
+
+  test('拒绝非游戏主条目的 Bangumi 链接', () {
+    expect(parseBangumiSubjectId('https://example.com/subject/42'), isNull);
+    expect(parseBangumiSubjectId('https://bgm.tv/subject/0'), isNull);
+    expect(parseBangumiSubjectId('https://bgm.tv/subject/42/ep/1'), isNull);
+    expect(parseBangumiSubjectId('https://bgm.tv/person/42'), isNull);
+    expect(parseBangumiSubjectId('https://api.bgm.tv/v0/subjects/42'), isNull);
+    expect(parseBangumiSubjectId('bgm.tv/subject/42'), isNull);
+  });
+
+  test('解析单条 Bangumi 游戏 Subject JSON', () {
+    const body = '''{
+      "id": 42,
+      "type": 4,
+      "name": "Japanese Title",
+      "name_cn": "中文标题",
+      "images": {"large": "https://img/large.jpg"}
+    }''';
+    final result = parseBangumiGameSubjectJson(body);
+    expect(result, isNotNull);
+    expect(result!.title, '中文标题');
+    expect(result.subjectUrl, 'https://bgm.tv/subject/42');
+    expect(result.imageUrl, 'https://img/large.jpg');
+  });
+
+  test('单条 Subject 仅接受游戏且必须有图片', () {
+    expect(
+      parseBangumiGameSubjectJson(
+        '{"id": 1, "type": 2, "name": "动画", "images": {"large": "a"}}',
+      ),
+      isNull,
+    );
+    expect(
+      parseBangumiGameSubjectJson('{"id": 1, "type": 4, "name": "无图"}'),
+      isNull,
+    );
+    expect(parseBangumiGameSubjectJson('not-json'), isNull);
+  });
+
+  test('全量游戏搜索请求省略 nsfw 筛选', () {
+    final payload = buildBangumiSearchPayload('游戏 通常版');
+    expect(payload['keyword'], '游戏');
+    expect(payload['sort'], 'match');
+    expect(payload['filter'], {
+      'type': [4],
+    });
+    expect((payload['filter'] as Map).containsKey('nsfw'), isFalse);
+  });
+
+  test('详情背景派生图会安全拒绝非法图像', () {
+    expect(createDetailBackgroundBytesForTest([0, 1, 2]), isNull);
+  });
 }
