@@ -25,6 +25,12 @@ abstract final class SettingsKeys {
 
   /// Bangumi/BGM API token（仅保存在本地设置，不写入日志）。
   static const bangumiToken = 'network.bangumiToken';
+
+  /// 主界面背景图的应用缓存路径。
+  static const shellBackgroundPath = 'ui.shellBackgroundPath';
+
+  /// Material 3 配色方案（ThemePalette 枚举名）。
+  static const themePalette = 'ui.themePalette';
 }
 
 class SettingsRepository {

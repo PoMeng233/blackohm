@@ -10,12 +10,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../features/launcher/launch_service.dart';
 import '../../features/scanner/ingestion_service.dart';
+import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
+import '../widgets/active_record_frame.dart';
 import '../widgets/exe_decision_dialog.dart';
 import '../widgets/folder_card.dart';
 import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
+import '../widgets/game_icon.dart';
 
 enum LibraryViewMode { grid, list }
 
@@ -144,6 +147,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          constraints: const BoxConstraints(maxWidth: 480),
           title: const Text('新建文件夹'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -209,12 +213,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          constraints: const BoxConstraints(maxWidth: 480),
           title: const Text('编辑文件夹'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceHover,
@@ -270,7 +274,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               onPressed: () => Navigator.pop(ctx, 'delete'),
               child: const Text('删除', style: TextStyle(color: AppColors.error)),
             ),
-            const Spacer(),
             TextButton(
               onPressed: () => Navigator.pop(ctx, 'cancel'),
               child: const Text('取消'),
@@ -346,14 +349,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     GameFolder folder,
     TapUpDetails details,
   ) async {
-    final offset = details.globalPosition;
+    final overlay =
+        Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+    final offset = overlay.globalToLocal(details.globalPosition);
     final action = await showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        offset.dx,
-        offset.dy,
-        offset.dx + 1,
-        offset.dy + 1,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(offset.dx, offset.dy, 1, 1),
+        Offset.zero & overlay.size,
       ),
       color: AppColors.surfaceActive,
       items: const [
@@ -518,9 +521,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gameListProvider);
     final foldersAsync = ref.watch(folderListProvider);
-    final activeGameId = ref.watch(
-      trackingStateProvider.select((value) => value.valueOrNull?.gameId ?? 0),
+    final activeState = ref.watch(
+      trackingStateProvider.select(
+        (value) => value.valueOrNull ?? TrackingPublicState.idle,
+      ),
     );
+    final activeGameId = activeState.gameId;
     final launcher = LaunchService();
 
     return Column(
@@ -853,6 +859,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ? (g.totalPlaySeconds / maxPlaySeconds).clamp(0.0, 1.0)
                       : 0.0;
                   final widthFraction = ratio * 0.75;
+                  final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+                  final listCacheWidth = (800 * pixelRatio).round().clamp(
+                    1,
+                    1440,
+                  );
+                  final listCacheHeight = (96 * pixelRatio).round().clamp(
+                    1,
+                    240,
+                  );
 
                   final rowItem = Material(
                     color: isCardActive
@@ -891,6 +906,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                       Image.file(
                                         backgroundFile,
                                         fit: BoxFit.cover,
+                                        cacheWidth: listCacheWidth,
+                                        cacheHeight: listCacheHeight,
+                                        filterQuality: FilterQuality.low,
                                         errorBuilder: (_, _, _) =>
                                             const SizedBox.shrink(),
                                       ),
@@ -922,32 +940,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             ),
                             child: Row(
                               children: [
-                                if (g.iconPng != null)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Image.memory(
-                                      g.iconPng!,
-                                      width: 32,
-                                      height: 32,
-                                      cacheWidth: 64,
-                                      cacheHeight: 64,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surfaceActive,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Icon(
-                                      Icons.videogame_asset,
-                                      size: 20,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ),
+                                GameIcon(
+                                  gameId: g.id,
+                                  size: 32,
+                                  radius: 6,
+                                  iconSize: 20,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -1038,6 +1036,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     ),
                   );
 
+                  final framedRow = ActiveRecordFrame(
+                    active:
+                        activeState.phase == TrackingPhase.live &&
+                        activeGameId == g.id,
+                    color: Theme.of(context).colorScheme.primary,
+                    radius: 8,
+                    child: rowItem,
+                  );
                   return Draggable<Game>(
                     data: g,
                     feedback: Material(
@@ -1047,8 +1053,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         child: Opacity(opacity: 0.85, child: rowItem),
                       ),
                     ),
-                    childWhenDragging: Opacity(opacity: 0.3, child: rowItem),
-                    child: rowItem,
+                    childWhenDragging: Opacity(opacity: 0.3, child: framedRow),
+                    child: framedRow,
                   );
                 },
               );

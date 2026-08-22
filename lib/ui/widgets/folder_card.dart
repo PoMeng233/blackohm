@@ -98,19 +98,28 @@ class FolderCard extends StatelessWidget {
                             color: AppColors.textSecondary,
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            '$gameCount 款游戏',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
+                          Flexible(
+                            child: Text(
+                              '$gameCount 款游戏',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                           const Spacer(),
-                          Text(
-                            formatPlayDuration(totalPlaySeconds),
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 10,
+                          Flexible(
+                            child: Text(
+                              formatPlayDuration(totalPlaySeconds),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 5),

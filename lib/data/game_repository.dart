@@ -11,10 +11,13 @@ class GameRepository {
   final AppDatabase _db;
 
   /// 全库列表（标题排序），驱动库页面网格/列表双视图。
+  ///
+  /// iconPng blob 不随列表下发（内存治理：100+ 游戏的图标字节
+  /// 不常驻 RAM），UI 经 [loadIcon] 按需加载。
   Stream<List<Game>> watchAll() {
     final q = _db.select(_db.games)
       ..orderBy([(g) => OrderingTerm(expression: g.title)]);
-    return q.watch();
+    return q.watch().map(_stripIcons);
   }
 
   /// 收藏优先。
@@ -24,7 +27,7 @@ class GameRepository {
         (g) => OrderingTerm.desc(g.favorite),
         (g) => OrderingTerm(expression: g.title),
       ]);
-    return q.watch();
+    return q.watch().map(_stripIcons);
   }
 
   /// 最近游玩（托盘快速启动用）。
@@ -33,8 +36,19 @@ class GameRepository {
       ..where((g) => g.lastPlayedAt.isNotNull())
       ..orderBy([(g) => OrderingTerm.desc(g.lastPlayedAt)])
       ..limit(limit);
-    return q.watch();
+    return q.watch().map(_stripIcons);
   }
+
+  /// 单个游戏图标字节（按需加载，供卡片/详情/统计页使用）。
+  Future<Uint8List?> loadIcon(int id) {
+    final q = _db.selectOnly(_db.games)
+      ..addColumns([_db.games.iconPng])
+      ..where(_db.games.id.equals(id));
+    return q.map((row) => row.read(_db.games.iconPng)).getSingleOrNull();
+  }
+
+  static List<Game> _stripIcons(List<Game> rows) =>
+      [for (final g in rows) g.copyWith(iconPng: const Value(null))];
 
   Stream<Game?> watchById(int id) {
     final q = _db.select(_db.games)..where((g) => g.id.equals(id));

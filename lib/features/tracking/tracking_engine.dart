@@ -66,6 +66,10 @@ class TrackingEngine {
   _ActiveSession? _active;
   bool _paused = false;
 
+  /// 主窗口可见性：隐藏到托盘时暂停秒表推送（计时/落盘不受影响），
+  /// 恢复可见时补发一次当前状态。
+  bool _uiVisible = true;
+
   Isolate? _watcherIsolate;
   ReceivePort? _port;
   int _shutdownEvent = 0;
@@ -141,6 +145,13 @@ class TrackingEngine {
   }
 
   bool get isPaused => _paused;
+
+  /// 主窗口可见性同步（AppShell 调用）。隐藏期间 _emit 静默。
+  void setUiVisible(bool visible) {
+    if (_uiVisible == visible) return;
+    _uiVisible = visible;
+    if (visible) _emit();
+  }
 
   // ── watcher 事件入口 ─────────────────────────────────────────
 
@@ -243,6 +254,7 @@ class TrackingEngine {
   }
 
   void _emit() {
+    if (!_uiVisible) return;
     if (!_states.isClosed) _states.add(current);
   }
 }

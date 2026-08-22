@@ -23,6 +23,7 @@ class MemoryTrimService {
   bool windowVisible = true;
 
   Timer? _timer;
+  Timer? _initialTimer;
   bool _started = false;
 
   static final int Function() _getCurrentProcess = DynamicLibrary.open(
@@ -39,7 +40,7 @@ class MemoryTrimService {
     if (_started || kDebugMode) return; // Debug 下引擎基线无意义，跳过
     _started = true;
     // 启动 90 秒后做一次首修剪（等首帧、图标、字体缓存稳定）。
-    Timer(const Duration(seconds: 90), _trimIfHidden);
+    _initialTimer = Timer(const Duration(seconds: 90), _trimIfHidden);
     _timer = Timer.periodic(const Duration(minutes: 5), (_) => _trimIfHidden());
   }
 
@@ -66,6 +67,8 @@ class MemoryTrimService {
   }
 
   void dispose() {
+    _initialTimer?.cancel();
+    _initialTimer = null;
     _timer?.cancel();
     _timer = null;
     _started = false;

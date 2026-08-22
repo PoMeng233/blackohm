@@ -37,7 +37,8 @@ Future<void> main() async {
   final imageCache = PaintingBinding.instance.imageCache;
   imageCache.maximumSize = 128;
   imageCache.maximumSizeBytes = 8 << 20;
-  container.read(memoryTrimProvider);
+  final trim = container.read(memoryTrimProvider);
+  trim.windowVisible = !startHidden;
 
   if (!startHidden) {
     await windowManager.show();

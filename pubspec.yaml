@@ -33,8 +33,6 @@ dependencies:
   # ── 设置页文件/目录选择 ─────────────────────────────────────
   file_picker: ^11.0.0
 
-  collection: ^1.19.1
-  cupertino_icons: ^1.0.8
   url_launcher: ^6.3.2
 
 dev_dependencies:

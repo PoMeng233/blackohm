@@ -1,12 +1,15 @@
 /// 设置页面：Locale Emulator 路径/参数配置、托盘行为与关于。
 library;
 
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
+import '../../features/background/background_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
 
@@ -55,6 +58,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (_bangumiTokenCtrl.text != s.bangumiToken) {
       _bangumiTokenCtrl.text = s.bangumiToken;
     }
+  }
+
+  Future<void> _pickShellBackground() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: '选择主界面背景图片',
+      type: FileType.image,
+    );
+    final sourcePath = result?.files.single.path;
+    if (sourcePath == null) return;
+    final cached = await BackgroundCacheService().copyLocal(sourcePath);
+    if (!mounted) return;
+    if (cached == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('图片格式不支持或文件超过 12 MB')));
+      return;
+    }
+    final previous = ref.read(settingsProvider).shellBackgroundPath;
+    if (previous.isNotEmpty) await BackgroundCacheService().delete(previous);
+    await ref.read(settingsProvider.notifier).setShellBackgroundPath(cached);
+  }
+
+  Future<void> _clearShellBackground() async {
+    final path = ref.read(settingsProvider).shellBackgroundPath;
+    await BackgroundCacheService().delete(path);
+    await ref.read(settingsProvider.notifier).setShellBackgroundPath('');
   }
 
   Future<void> _pickLeProc() async {
@@ -177,16 +206,68 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
-                    TextButton.icon(
-                      icon: const Icon(Icons.menu_book_rounded, size: 17),
-                      label: const Text('查看 API 文档'),
-                      onPressed: () => launchUrl(
-                        Uri.parse('https://bangumi.github.io/api/#/'),
-                        mode: LaunchMode.externalApplication,
-                      ),
-                    ),
                   ],
                 ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        _sectionTitle('主界面背景'),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 116,
+                  height: 58,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceHover,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child:
+                      settings.shellBackgroundPath.isNotEmpty &&
+                          File(settings.shellBackgroundPath).existsSync()
+                      ? Image.file(
+                          File(settings.shellBackgroundPath),
+                          fit: BoxFit.cover,
+                          cacheWidth: 232,
+                          cacheHeight: 116,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        )
+                      : const Icon(
+                          Icons.wallpaper_outlined,
+                          color: AppColors.textMuted,
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    settings.shellBackgroundPath.isEmpty
+                        ? '未设置背景图片'
+                        : '背景仅显示在主内容区',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: _pickShellBackground,
+                  icon: const Icon(Icons.image_outlined, size: 17),
+                  label: const Text('选择'),
+                ),
+                if (settings.shellBackgroundPath.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: _clearShellBackground,
+                    icon: const Icon(Icons.delete_outline, size: 17),
+                    label: const Text('清除'),
+                  ),
               ],
             ),
           ),
@@ -198,7 +279,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<ThemePalette>(
-              initialValue: ref.watch(themePaletteProvider),
+              initialValue: settings.themePalette,
               decoration: const InputDecoration(labelText: '界面配色'),
               items: ThemePalette.values
                   .map(
@@ -210,7 +291,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   .toList(),
               onChanged: (palette) {
                 if (palette != null) {
-                  ref.read(themePaletteProvider.notifier).state = palette;
+                  notifier.setThemePalette(palette);
                 }
               },
             ),

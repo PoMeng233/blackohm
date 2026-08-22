@@ -11,6 +11,7 @@ import '../../features/tracking/session_merge.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
+import '../widgets/game_icon.dart';
 
 enum InsightsRange { month, quarter, year }
 
@@ -620,23 +621,13 @@ class _RankRow extends StatelessWidget {
             style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
           ),
         ),
-        if (game.game.iconPng != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.memory(
-              game.game.iconPng!,
-              width: 26,
-              height: 26,
-              cacheWidth: 52,
-              cacheHeight: 52,
-            ),
-          )
-        else
-          const Icon(
-            Icons.videogame_asset,
-            color: AppColors.textMuted,
-            size: 24,
-          ),
+        GameIcon(
+          gameId: game.game.id,
+          size: 26,
+          radius: 4,
+          boxed: false,
+          iconSize: 24,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -721,24 +712,23 @@ class _SessionRow extends StatelessWidget {
     final t = session.startedAt;
     final date =
         '${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')} ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    final game = this.game;
     return Row(
       children: [
-        if (game?.iconPng != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.memory(
-              game!.iconPng!,
-              width: 26,
-              height: 26,
-              cacheWidth: 52,
-              cacheHeight: 52,
-            ),
-          )
-        else
+        if (game == null)
           const Icon(
             Icons.schedule_rounded,
             size: 22,
             color: AppColors.textMuted,
+          )
+        else
+          GameIcon(
+            gameId: game.id,
+            size: 26,
+            radius: 4,
+            boxed: false,
+            fallbackIcon: Icons.schedule_rounded,
+            iconSize: 22,
           ),
         const SizedBox(width: 9),
         Expanded(

@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,10 +15,6 @@ import 'data/settings_repository.dart';
 import 'features/memory/memory_trim_service.dart';
 import 'features/tracking/tracking_engine.dart';
 import 'ui/theme.dart';
-
-final themePaletteProvider = StateProvider<ThemePalette>(
-  (ref) => ThemePalette.obsidian,
-);
 
 // ── 数据层 ────────────────────────────────────────────────────
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -74,6 +71,18 @@ final trackingStateProvider = StreamProvider<TrackingPublicState>(
   (ref) => ref.watch(trackingEngineProvider).states,
 );
 
+// ── 窗口可见性 ────────────────────────────────────────────────
+/// 主窗口是否可见（AppShell 在 show/hide/minimize/restore 时同步）。
+/// 隐藏时暂停 UI 动画与秒表推送，空闲态 CPU 趋近于零。
+final windowVisibleProvider = StateProvider<bool>((ref) => true);
+
+// ── 游戏图标按需加载 ──────────────────────────────────────────
+/// 列表查询不再携带 iconPng blob；卡片可见时按 gameId 惰性取一次，
+/// 结果由 FutureProvider 缓存，避免 100+ 游戏的图标字节常驻内存。
+final gameIconProvider = FutureProvider.family<Uint8List?, int>((ref, id) {
+  return ref.watch(gameRepoProvider).loadIcon(id);
+});
+
 // ── 内存治理 ──────────────────────────────────────────────────
 /// 托盘/空闲态工作集修剪。AppShell 在 show/hide 时同步 windowVisible。
 final memoryTrimProvider = Provider<MemoryTrimService>((ref) {
@@ -93,6 +102,8 @@ class AppSettingsState {
     this.closeToTray = true,
     this.trackingPaused = false,
     this.bangumiToken = '',
+    this.shellBackgroundPath = '',
+    this.themePalette = ThemePalette.obsidian,
   });
 
   final String leProcPath;
@@ -102,6 +113,8 @@ class AppSettingsState {
   final bool closeToTray;
   final bool trackingPaused;
   final String bangumiToken;
+  final String shellBackgroundPath;
+  final ThemePalette themePalette;
 
   AppSettingsState copyWith({
     String? leProcPath,
@@ -111,6 +124,8 @@ class AppSettingsState {
     bool? closeToTray,
     bool? trackingPaused,
     String? bangumiToken,
+    String? shellBackgroundPath,
+    ThemePalette? themePalette,
   }) => AppSettingsState(
     leProcPath: leProcPath ?? this.leProcPath,
     leArgsTemplate: leArgsTemplate ?? this.leArgsTemplate,
@@ -119,6 +134,8 @@ class AppSettingsState {
     closeToTray: closeToTray ?? this.closeToTray,
     trackingPaused: trackingPaused ?? this.trackingPaused,
     bangumiToken: bangumiToken ?? this.bangumiToken,
+    shellBackgroundPath: shellBackgroundPath ?? this.shellBackgroundPath,
+    themePalette: themePalette ?? this.themePalette,
   );
 }
 
@@ -146,6 +163,13 @@ class SettingsController extends StateNotifier<AppSettingsState> {
     );
     final paused = await _repo.getBool(SettingsKeys.trackingPaused);
     final bangumiToken = await _repo.get(SettingsKeys.bangumiToken);
+    final shellBackgroundPath = await _repo.get(
+      SettingsKeys.shellBackgroundPath,
+    );
+    final paletteName = await _repo.get(SettingsKeys.themePalette);
+    final themePalette = ThemePalette.values
+        .where((p) => p.name == paletteName)
+        .firstOrNull;
     state = AppSettingsState(
       leProcPath: lePath,
       leArgsTemplate: leArgs,
@@ -154,6 +178,8 @@ class SettingsController extends StateNotifier<AppSettingsState> {
       closeToTray: closeToTray,
       trackingPaused: paused,
       bangumiToken: bangumiToken,
+      shellBackgroundPath: shellBackgroundPath,
+      themePalette: themePalette ?? ThemePalette.obsidian,
     );
     _engine.setPaused(paused);
   }
@@ -192,6 +218,16 @@ class SettingsController extends StateNotifier<AppSettingsState> {
   Future<void> setBangumiToken(String v) async {
     state = state.copyWith(bangumiToken: v);
     await _repo.set(SettingsKeys.bangumiToken, v.trim());
+  }
+
+  Future<void> setShellBackgroundPath(String v) async {
+    state = state.copyWith(shellBackgroundPath: v);
+    await _repo.set(SettingsKeys.shellBackgroundPath, v);
+  }
+
+  Future<void> setThemePalette(ThemePalette v) async {
+    state = state.copyWith(themePalette: v);
+    await _repo.set(SettingsKeys.themePalette, v.name);
   }
 }
 

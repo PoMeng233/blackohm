@@ -13,7 +13,9 @@ class BlackOhmApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = ref.watch(themePaletteProvider);
+    final palette = ref.watch(
+      settingsProvider.select((settings) => settings.themePalette),
+    );
     return MaterialApp(
       title: 'BlackOhm',
       debugShowCheckedModeBanner: false,

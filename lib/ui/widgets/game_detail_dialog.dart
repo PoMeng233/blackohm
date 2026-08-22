@@ -14,6 +14,7 @@ import '../../features/background/background_service.dart';
 import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
 import '../theme.dart';
+import 'game_icon.dart';
 
 class GameDetailDialog extends ConsumerStatefulWidget {
   const GameDetailDialog({required this.game, super.key});
@@ -32,6 +33,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   int? _folderId;
   String? _backgroundPath;
   String? _detailBackgroundPath;
+  double _blurAmount = 0;
+  double _requestedBlurAmount = 0;
+  bool _preparingBlur = false;
   bool _backgroundBusy = false;
   late final Stream<List<PlaySession>> _sessionsStream;
 
@@ -51,7 +55,6 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _sessionsStream = ref
         .read(sessionRepoProvider)
         .watchForGame(widget.game.id);
-    unawaited(_ensureDetailBackground());
   }
 
   @override
@@ -63,23 +66,42 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   }
 
   Future<void> _prepareDetailBackground(String? sourcePath) async {
+    if (sourcePath == null || sourcePath.isEmpty || _preparingBlur) return;
+    setState(() => _preparingBlur = true);
     final detailPath = await _backgroundCache.createDetailBackground(
       sourcePath,
     );
-    if (!mounted || detailPath == null) return;
+    if (!mounted || detailPath == null || _backgroundPath != sourcePath) {
+      if (mounted) setState(() => _preparingBlur = false);
+      return;
+    }
     await ref
         .read(gameRepoProvider)
         .update(
           widget.game.id,
           GamesCompanion(detailBackgroundPath: Value(detailPath)),
         );
-    if (mounted) setState(() => _detailBackgroundPath = detailPath);
+    if (mounted) {
+      setState(() {
+        _detailBackgroundPath = detailPath;
+        _blurAmount = _requestedBlurAmount;
+        _preparingBlur = false;
+      });
+    }
   }
 
-  Future<void> _ensureDetailBackground() async {
-    final current = _detailBackgroundPath;
-    if (current != null && await File(current).exists()) return;
-    await _prepareDetailBackground(_backgroundPath);
+  Future<void> _enableBlur(double value) async {
+    _requestedBlurAmount = value;
+    if (value <= 0) {
+      setState(() => _blurAmount = 0);
+      return;
+    }
+    final path = _detailBackgroundPath;
+    if (path == null || !await File(path).exists()) {
+      unawaited(_prepareDetailBackground(_backgroundPath));
+      return;
+    }
+    setState(() => _blurAmount = value);
   }
 
   Future<void> _chooseLocalBackground() async {
@@ -113,8 +135,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       setState(() {
         _backgroundPath = cached;
         _detailBackgroundPath = null;
+        _blurAmount = 0;
+        _requestedBlurAmount = 0;
       });
-      unawaited(_prepareDetailBackground(cached));
     }
     if (mounted) setState(() => _backgroundBusy = false);
   }
@@ -260,8 +283,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       setState(() {
         _backgroundPath = cached;
         _detailBackgroundPath = null;
+        _blurAmount = 0;
+        _requestedBlurAmount = 0;
       });
-      unawaited(_prepareDetailBackground(cached));
     }
     if (mounted) setState(() => _backgroundBusy = false);
   }
@@ -357,12 +381,12 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
           borderRadius: BorderRadius.circular(14),
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final sourcePath = _backgroundPath;
               final detailPath = _detailBackgroundPath;
-              final fallbackPath = _backgroundPath;
-              final path = detailPath != null && File(detailPath).existsSync()
-                  ? detailPath
-                  : fallbackPath;
-              final hasBackground = path != null && File(path).existsSync();
+              final hasSource =
+                  sourcePath != null && File(sourcePath).existsSync();
+              final hasDetail =
+                  detailPath != null && File(detailPath).existsSync();
               final pixelRatio = MediaQuery.devicePixelRatioOf(context);
               final cacheWidth = (constraints.maxWidth * pixelRatio * 1.15)
                   .round()
@@ -373,11 +397,11 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (hasBackground)
+                  if (hasSource)
                     Transform.scale(
                       scale: 1.12,
                       child: Image.file(
-                        File(path),
+                        File(sourcePath),
                         fit: BoxFit.cover,
                         cacheWidth: cacheWidth,
                         cacheHeight: cacheHeight,
@@ -385,7 +409,24 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ),
-                  if (hasBackground)
+                  if (hasDetail && _blurAmount > 0)
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: _blurAmount,
+                        child: Transform.scale(
+                          scale: 1.12,
+                          child: Image.file(
+                            File(detailPath),
+                            fit: BoxFit.cover,
+                            cacheWidth: cacheWidth,
+                            cacheHeight: cacheHeight,
+                            filterQuality: FilterQuality.low,
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (hasSource)
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -407,29 +448,12 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                       children: [
                         Row(
                           children: [
-                            widget.game.iconPng != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.memory(
-                                      widget.game.iconPng!,
-                                      width: 44,
-                                      height: 44,
-                                      cacheWidth: 88,
-                                      cacheHeight: 88,
-                                    ),
-                                  )
-                                : Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surfaceActive,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.videogame_asset,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ),
+                            GameIcon(
+                              gameId: widget.game.id,
+                              size: 44,
+                              radius: 8,
+                              iconSize: 24,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -529,7 +553,52 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                           ),
                         const SizedBox(height: 8),
                         _backgroundSection(),
-                        const SizedBox(height: 10),
+                        if (_backgroundPath != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Text(
+                                '背景模糊',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              Expanded(
+                                child: Slider(
+                                  value: _blurAmount,
+                                  onChanged: _preparingBlur
+                                      ? null
+                                      : (value) =>
+                                            unawaited(_enableBlur(value)),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 34,
+                                child: Text(
+                                  '${(_blurAmount * 100).round()}%',
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_preparingBlur)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 52),
+                              child: Text(
+                                '正在准备模糊背景…',
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                        ],
+                        const SizedBox(height: 6),
                         const Text(
                           '游玩历史记录',
                           style: TextStyle(
