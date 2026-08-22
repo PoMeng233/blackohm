@@ -42,6 +42,10 @@ class Games extends Table {
   /// 详情弹窗专用的低分辨率模糊背景缓存路径。
   TextColumn get detailBackgroundPath => text().nullable()();
 
+  /// 详情背景模糊派生图覆盖原图的强度（0 = 清晰）。
+  RealColumn get backgroundBlurAmount =>
+      real().withDefault(const Constant(0.0))();
+
   /// 附加启动参数。
   TextColumn get launchArgs => text().withDefault(const Constant(''))();
 
@@ -63,8 +67,7 @@ class Games extends Table {
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
 
   /// 所属自定义文件夹 ID（为空表示未归类/默认未放入文件夹）。
-  IntColumn get folderId =>
-      integer().nullable().references(GameFolders, #id)();
+  IntColumn get folderId => integer().nullable().references(GameFolders, #id)();
 }
 
 /// 游戏库自定义文件夹/分类表
@@ -77,10 +80,12 @@ class GameFolders extends Table {
   /// 排序序号
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 
-  /// 是否将该文件夹下的游戏计入游戏库普通排序时的累计时长 / 统计聚合
-  /// 默认不计入时长排序（false），提供选项开启（true）
+  /// 旧版兼容字段：不再参与 UI 或排序逻辑。
   BoolColumn get includeInTotalTime =>
       boolean().withDefault(const Constant(false))();
+
+  /// 是否在“全部游戏”主页显示该文件夹卡片。
+  BoolColumn get showOnHome => boolean().withDefault(const Constant(true))();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -122,7 +127,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -141,6 +146,12 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) {
         await m.addColumn(games, games.detailBackgroundPath);
+      }
+      if (from < 5) {
+        await m.addColumn(gameFolders, gameFolders.showOnHome);
+      }
+      if (from < 6) {
+        await m.addColumn(games, games.backgroundBlurAmount);
       }
     },
     beforeOpen: (details) async {

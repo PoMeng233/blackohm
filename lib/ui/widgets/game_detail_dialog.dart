@@ -52,6 +52,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _folderId = widget.game.folderId;
     _backgroundPath = widget.game.backgroundPath;
     _detailBackgroundPath = widget.game.detailBackgroundPath;
+    _blurAmount = widget.game.backgroundBlurAmount.clamp(0.0, 1.0);
+    _requestedBlurAmount = _blurAmount;
     _sessionsStream = ref
         .read(sessionRepoProvider)
         .watchForGame(widget.game.id);
@@ -90,18 +92,40 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     }
   }
 
-  Future<void> _enableBlur(double value) async {
+  Future<bool> _enableBlur(double value) async {
     _requestedBlurAmount = value;
     if (value <= 0) {
-      setState(() => _blurAmount = 0);
-      return;
+      if (mounted) setState(() => _blurAmount = 0);
+      return true;
     }
     final path = _detailBackgroundPath;
     if (path == null || !await File(path).exists()) {
-      unawaited(_prepareDetailBackground(_backgroundPath));
-      return;
+      await _prepareDetailBackground(_backgroundPath);
+      final prepared = _detailBackgroundPath;
+      if (prepared == null || !await File(prepared).exists()) {
+        if (mounted) setState(() => _blurAmount = 0);
+        return false;
+      }
     }
-    setState(() => _blurAmount = value);
+    if (mounted) setState(() => _blurAmount = value);
+    return true;
+  }
+
+  Future<void> _commitBlurAmount(double value) async {
+    final ready = await _enableBlur(value);
+    if (ready) {
+      await _saveBlurAmount(value);
+    }
+  }
+
+  Future<void> _saveBlurAmount(double value) async {
+    final clamped = value.clamp(0.0, 1.0);
+    await ref
+        .read(gameRepoProvider)
+        .update(
+          widget.game.id,
+          GamesCompanion(backgroundBlurAmount: Value(clamped)),
+        );
   }
 
   Future<void> _chooseLocalBackground() async {
@@ -130,6 +154,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
             GamesCompanion(
               backgroundPath: Value(cached),
               detailBackgroundPath: const Value(null),
+              backgroundBlurAmount: const Value(0.0),
             ),
           );
       setState(() {
@@ -152,6 +177,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
           const GamesCompanion(
             backgroundPath: Value(null),
             detailBackgroundPath: Value(null),
+            backgroundBlurAmount: Value(0.0),
           ),
         );
     if (mounted) {
@@ -278,6 +304,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
             GamesCompanion(
               backgroundPath: Value(cached),
               detailBackgroundPath: const Value(null),
+              backgroundBlurAmount: const Value(0.0),
             ),
           );
       setState(() {
@@ -301,6 +328,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
         leProfile: Value(_profileCtrl.text.trim()),
         folderId: Value(_folderId),
         backgroundPath: Value(_backgroundPath),
+        backgroundBlurAmount: Value(_blurAmount.clamp(0.0, 1.0)),
       ),
     );
     if (mounted) Navigator.of(context).pop();
@@ -570,7 +598,13 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                                   onChanged: _preparingBlur
                                       ? null
                                       : (value) =>
-                                            unawaited(_enableBlur(value)),
+                                            setState(() => _blurAmount = value),
+                                  onChangeEnd: _preparingBlur
+                                      ? null
+                                      : (value) {
+                                          _requestedBlurAmount = value;
+                                          unawaited(_commitBlurAmount(value));
+                                        },
                                 ),
                               ),
                               SizedBox(

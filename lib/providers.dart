@@ -76,6 +76,10 @@ final trackingStateProvider = StreamProvider<TrackingPublicState>(
 /// 隐藏时暂停 UI 动画与秒表推送，空闲态 CPU 趋近于零。
 final windowVisibleProvider = StateProvider<bool>((ref) => true);
 
+/// 当前正在浏览的具体文件夹 ID（null 表示全部游戏/未分类/非库页）。
+/// 用于外部拖拽或“添加游戏”时，把新入库的游戏直接加入当前文件夹。
+final currentBrowsingFolderIdProvider = StateProvider<int?>((ref) => null);
+
 // ── 游戏图标按需加载 ──────────────────────────────────────────
 /// 列表查询不再携带 iconPng blob；卡片可见时按 gameId 惰性取一次，
 /// 结果由 FutureProvider 缓存，避免 100+ 游戏的图标字节常驻内存。

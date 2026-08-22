@@ -81,8 +81,9 @@ void main() {
 
   testWidgets('活跃计时中切换文件夹不抛异常（网格视图）', (tester) async {
     await pumpLibrary(tester);
-    // 主页只显示未分类游戏与文件夹入口。
+    // 全部游戏视图显示所有游戏，文件夹只是额外的聚合入口。
     expect(find.text('Idle Game'), findsOneWidget);
+    expect(find.text('Active Game'), findsOneWidget);
 
     await tester.tap(find.text('在玩').first);
     await tester.pump(const Duration(milliseconds: 100));
@@ -102,6 +103,25 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 33));
     }
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('累计时长排序时切换文件夹不抛异常（列表视图）', (tester) async {
+    await pumpLibrary(tester);
+    await tester.tap(find.byIcon(Icons.view_list));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('最近游玩'));
+    await tester.pump();
+    await tester.tap(find.text('累计时长').last);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('在玩').first);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Active Game'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

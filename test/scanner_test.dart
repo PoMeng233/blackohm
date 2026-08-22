@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:blackohm/core/database/app_database.dart';
+import 'package:blackohm/data/game_repository.dart';
 import 'package:blackohm/features/scanner/directory_scanner.dart';
 import 'package:blackohm/features/scanner/ingestion_service.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -85,6 +88,33 @@ void main() {
     expect(report.added, ['测试游戏']);
     expect(report.duplicatePaths, hasLength(1));
     expect(report.noExePaths, hasLength(1));
+  });
+
+  test('入库服务支持将新游戏直接归属到指定 folderId', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final repo = GameRepository(db);
+    final service = IngestionService(repo);
+    final folder = await (db.select(
+      db.gameFolders,
+    )..where((f) => f.name.equals('在玩'))).getSingle();
+    final tempDir = await Directory.systemTemp.createTemp(
+      'blackohm_ingest_folder_test_',
+    );
+    try {
+      final exe = File(
+        '${tempDir.path}${Platform.pathSeparator}sample_game.exe',
+      );
+      await exe.writeAsBytes([0x4D, 0x5A]);
+      final report = await service.ingestDroppedPaths([
+        exe.path,
+      ], folderId: folder.id);
+      expect(report.added, hasLength(1));
+      final games = await repo.watchAll().first;
+      expect(games.single.folderId, folder.id);
+    } finally {
+      await db.close();
+      if (await tempDir.exists()) await tempDir.delete(recursive: true);
+    }
   });
 }
 

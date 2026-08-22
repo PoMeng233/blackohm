@@ -88,7 +88,10 @@ class IngestionService {
   final GameRepository _games;
 
   /// 拖入一批路径（目录或 exe）→ 扫描 + 富化 + 分流。
-  Future<IngestReport> ingestDroppedPaths(List<String> paths) async {
+  Future<IngestReport> ingestDroppedPaths(
+    List<String> paths, {
+    int? folderId,
+  }) async {
     final report = IngestReport();
     final existing = <String>{};
     // 全库已入库路径（去重判定）。
@@ -162,7 +165,7 @@ class IngestionService {
         duplicateCandidates: dups,
       )) {
         case CandidateResolution.autoAdd:
-          await _insertCandidate(live.single, report);
+          await _insertCandidate(live.single, report, folderId: folderId);
         case CandidateResolution.chooseMainExe:
           report.pendingDecisions.add(live);
         case CandidateResolution.duplicateOnly:
@@ -176,13 +179,17 @@ class IngestionService {
   }
 
   /// 决策弹窗点选后调用。
-  Future<void> addChosen(EnrichedCandidate c, IngestReport report) =>
-      _insertCandidate(c, report);
+  Future<void> addChosen(
+    EnrichedCandidate c,
+    IngestReport report, {
+    int? folderId,
+  }) => _insertCandidate(c, report, folderId: folderId);
 
   Future<void> _insertCandidate(
     EnrichedCandidate c,
-    IngestReport report,
-  ) async {
+    IngestReport report, {
+    int? folderId,
+  }) async {
     // 符号链接解析 → 长路径 → 标准化（与运行期捕获同构）。
     String real;
     try {
@@ -205,6 +212,7 @@ class IngestionService {
         exePath: normalized,
         dirPath: dirPath,
         iconPng: c.icon == null ? const Value.absent() : Value(c.icon!),
+        folderId: Value(folderId),
       ),
     );
     report.added.add(title);

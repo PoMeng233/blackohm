@@ -100,6 +100,14 @@ String formatPlayDuration(int totalSeconds) {
   return '$s 秒';
 }
 
+String formatCompactPlayDuration(int totalSeconds) {
+  if (totalSeconds >= 3600) {
+    return '${(totalSeconds / 3600).toStringAsFixed(1)}h';
+  }
+  if (totalSeconds >= 60) return '${totalSeconds ~/ 60}m';
+  return '${totalSeconds}s';
+}
+
 /// 实时秒表格式：01:23:45 / 12:34
 String formatStopwatch(int elapsedMs) {
   final totalSec = elapsedMs ~/ 1000;

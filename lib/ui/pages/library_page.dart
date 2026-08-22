@@ -74,8 +74,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
+  void _selectFolder(int? folderId) {
+    setState(() => _selectedFolderId = folderId);
+    final target = folderId != null && folderId > 0 ? folderId : null;
+    ref.read(currentBrowsingFolderIdProvider.notifier).state = target;
+  }
+
   Future<void> _addGame() async {
     if (_adding) return;
+    final targetFolderId = _selectedFolderId != null && _selectedFolderId! > 0
+        ? _selectedFolderId
+        : null;
     final source = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -116,7 +125,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     setState(() => _adding = true);
     try {
       final service = IngestionService(ref.read(gameRepoProvider));
-      final report = await service.ingestDroppedPaths([path]);
+      final report = await service.ingestDroppedPaths([
+        path,
+      ], folderId: targetFolderId);
       if (!mounted) return;
       for (final candidates in report.pendingDecisions) {
         await showDialog<void>(
@@ -124,7 +135,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           barrierDismissible: false,
           builder: (_) => ExeDecisionDialog(
             candidates: candidates,
-            onSelected: (candidate) => service.addChosen(candidate, report),
+            onSelected: (candidate) =>
+                service.addChosen(candidate, report, folderId: targetFolderId),
           ),
         );
       }
@@ -142,7 +154,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   Future<void> _createFolderDialog() async {
     final nameCtrl = TextEditingController();
-    var includeInTotalTime = false;
+    var showOnHome = true;
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -163,18 +175,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('参与主页累计时长排行', style: TextStyle(fontSize: 13)),
+                title: const Text(
+                  '在“全部游戏”显示文件夹卡片',
+                  style: TextStyle(fontSize: 13),
+                ),
                 subtitle: const Text(
-                  '开启后按文件夹成员总时长参与“全部游戏”的累计时长排序',
+                  '关闭后仍可从顶部文件夹栏进入和拖入游戏',
                   style: TextStyle(fontSize: 11),
                 ),
-                value: includeInTotalTime,
-                onChanged: (v) => setDialogState(() => includeInTotalTime = v),
+                value: showOnHome,
+                onChanged: (v) => setDialogState(() => showOnHome = v),
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  '文件夹成员仍会正常记录个人时长；该开关只影响主页的累计时长排序。',
+                  '全部游戏会显示所有游戏；进入文件夹后只显示其中成员。该开关只控制主页是否显示文件夹卡片。',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                 ),
               ),
@@ -196,7 +211,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     if (created == true && nameCtrl.text.trim().isNotEmpty) {
       await ref
           .read(folderRepoProvider)
-          .create(nameCtrl.text.trim(), includeInTotalTime: includeInTotalTime);
+          .create(nameCtrl.text.trim(), showOnHome: showOnHome);
     }
   }
 
@@ -208,7 +223,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       0,
       (total, game) => total + game.totalPlaySeconds,
     );
-    var includeInTotalTime = folder.includeInTotalTime;
+    var showOnHome = folder.showOnHome;
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -252,18 +267,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('参与主页累计时长排行', style: TextStyle(fontSize: 13)),
+                title: const Text(
+                  '在“全部游戏”显示文件夹卡片',
+                  style: TextStyle(fontSize: 13),
+                ),
                 subtitle: const Text(
-                  '开启后按文件夹成员总时长参与“全部游戏”的累计时长排序',
+                  '关闭后仍可从顶部文件夹栏进入和拖入游戏',
                   style: TextStyle(fontSize: 11),
                 ),
-                value: includeInTotalTime,
-                onChanged: (v) => setDialogState(() => includeInTotalTime = v),
+                value: showOnHome,
+                onChanged: (v) => setDialogState(() => showOnHome = v),
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  '文件夹成员仍会正常记录个人时长；该开关只影响主页的累计时长排序。',
+                  '全部游戏会显示所有游戏；进入文件夹后只显示其中成员。该开关只控制主页是否显示文件夹卡片。',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 11),
                 ),
               ),
@@ -296,7 +314,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             folder.id,
             GameFoldersCompanion(
               name: Value(name),
-              includeInTotalTime: Value(includeInTotalTime),
+              showOnHome: Value(showOnHome),
             ),
           );
     } else if (result == 'delete') {
@@ -401,28 +419,47 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           _folderChip(
             label: '全部游戏',
             isSelected: _selectedFolderId == null,
-            onTap: () => setState(() => _selectedFolderId = null),
+            onTap: () => _selectFolder(null),
           ),
           const SizedBox(width: 8),
           _folderChip(
             label: '未分类',
             isSelected: _selectedFolderId == -1,
             targetFolderId: -1,
-            onTap: () => setState(() => _selectedFolderId = -1),
+            onTap: () => _selectFolder(-1),
           ),
           const SizedBox(width: 8),
           ...folders.map(
             (f) => Padding(
+              key: ValueKey('folder-tab-${f.id}'),
               padding: const EdgeInsets.only(right: 8),
-              child: _folderChip(
-                label: f.name,
-                isSelected: _selectedFolderId == f.id,
-                targetFolderId: f.id,
-                includeInTotal: f.includeInTotalTime,
-                onTap: () => setState(() => _selectedFolderId = f.id),
-                onLongPress: () => _editFolderDialog(f),
-                onSecondaryTapUp: (details) =>
-                    _showFolderContextMenu(f, details),
+              child: LongPressDraggable<GameFolder>(
+                data: f,
+                axis: Axis.horizontal,
+                feedback: Material(
+                  color: Colors.transparent,
+                  child: _folderChip(
+                    label: f.name,
+                    isSelected: false,
+                    targetFolderId: null,
+                    onTap: () {},
+                  ),
+                ),
+                child: DragTarget<GameFolder>(
+                  onWillAcceptWithDetails: (details) => details.data.id != f.id,
+                  onAcceptWithDetails: (details) =>
+                      _reorderFolder(details.data, f),
+                  builder: (context, candidateData, rejectedData) =>
+                      _folderChip(
+                        label: f.name,
+                        isSelected: _selectedFolderId == f.id,
+                        targetFolderId: f.id,
+                        isReorderHovering: candidateData.isNotEmpty,
+                        onTap: () => _selectFolder(f.id),
+                        onSecondaryTapUp: (details) =>
+                            _showFolderContextMenu(f, details),
+                      ),
+                ),
               ),
             ),
           ),
@@ -436,11 +473,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     );
   }
 
+  Future<void> _reorderFolder(GameFolder source, GameFolder target) async {
+    final folders = ref.read(folderListProvider).valueOrNull;
+    if (folders == null) return;
+    final ids = folders.map((folder) => folder.id).toList();
+    final from = ids.indexOf(source.id);
+    final to = ids.indexOf(target.id);
+    if (from < 0 || to < 0 || from == to) return;
+    ids.removeAt(from);
+    ids.insert(to, source.id);
+    await ref.read(folderRepoProvider).reorder(ids);
+  }
+
   Widget _folderChip({
     required String label,
     required bool isSelected,
     int? targetFolderId,
-    bool includeInTotal = false,
+    bool isReorderHovering = false,
     required VoidCallback onTap,
     VoidCallback? onLongPress,
     GestureTapUpCallback? onSecondaryTapUp,
@@ -455,15 +504,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isHovered
+          color: isHovered || isReorderHovering
               ? primary.withAlpha(40)
               : (isSelected ? primary.withAlpha(28) : AppColors.surface),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isHovered
+            color: isHovered || isReorderHovering
                 ? primary
                 : (isSelected ? primary : AppColors.border),
-            width: isHovered || isSelected ? 1.5 : 1,
+            width: isHovered || isReorderHovering || isSelected ? 1.5 : 1,
           ),
         ),
         child: Row(
@@ -487,15 +536,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 color: isSelected ? primary : AppColors.textPrimary,
               ),
             ),
-            if (includeInTotal &&
-                targetFolderId != null &&
-                targetFolderId != -1) ...[
-              const SizedBox(width: 4),
-              Tooltip(
-                message: '已启用累计时长统计',
-                child: Icon(Icons.timer_outlined, size: 12, color: primary),
-              ),
-            ],
           ],
         ),
       ),
@@ -664,10 +704,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               // 过滤文件夹
               var filtered = games.where((g) {
                 if (_onlyFavorites && !g.favorite) return false;
-                if (_selectedFolderId == null || _selectedFolderId == -1) {
-                  // 首页仅展示文件夹入口与未分类游戏，避免成员游戏重复占卡。
+                if (_selectedFolderId == -1) {
                   if (g.folderId != null) return false;
-                } else if (g.folderId != _selectedFolderId) {
+                } else if (_selectedFolderId != null &&
+                    g.folderId != _selectedFolderId) {
                   return false;
                 }
                 if (_searchQuery.isEmpty) return true;
@@ -688,7 +728,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       b.title.toLowerCase(),
                     );
                   case LibrarySort.totalTime:
-                    // 文件夹内浏览永远按游戏真实时长排序；主页只会显示未分类游戏。
+                    // 文件夹内浏览按游戏真实时长排序；全部游戏视图则展示所有游戏。
                     return b.totalPlaySeconds.compareTo(a.totalPlaySeconds);
                   case LibrarySort.createdAt:
                     return b.createdAt.compareTo(a.createdAt);
@@ -720,20 +760,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 }
               }
               final folderCards = _selectedFolderId == null
-                  ? [...folders]
-                  : const <GameFolder>[];
-              if (_sort == LibrarySort.totalTime) {
-                folderCards.sort((a, b) {
-                  final aIncluded = a.includeInTotalTime;
-                  final bIncluded = b.includeInTotalTime;
-                  if (aIncluded != bIncluded) return aIncluded ? -1 : 1;
-                  if (!aIncluded) return a.name.compareTo(b.name);
-                  final time = (folderTotals[b.id] ?? 0).compareTo(
-                    folderTotals[a.id] ?? 0,
-                  );
-                  return time != 0 ? time : a.name.compareTo(b.name);
-                });
-              }
+                  ? folders.where((folder) => folder.showOnHome).toList()
+                  : <GameFolder>[];
               if (filtered.isEmpty && folderCards.isEmpty) {
                 return Center(
                   child: Column(
@@ -791,8 +819,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         folder: folder,
                         gameCount: gameCount,
                         totalPlaySeconds: folderTotals[folder.id] ?? 0,
-                        onOpen: () =>
-                            setState(() => _selectedFolderId = folder.id),
+                        onOpen: () => _selectFolder(folder.id),
                         onMoveGame: (game) =>
                             _moveGameToFolder(game, folder.id, folder.name),
                         onShowMenu: (details) =>
@@ -852,7 +879,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       backgroundPath != null && backgroundPath.isNotEmpty
                       ? File(backgroundPath)
                       : null;
-                  final hasBackground = backgroundFile != null;
+                  final hasBackground =
+                      backgroundFile != null && backgroundFile.existsSync();
+                  final detailPath = g.detailBackgroundPath;
+                  final hasBlurBackground =
+                      g.backgroundBlurAmount > 0 &&
+                      detailPath != null &&
+                      File(detailPath).existsSync();
 
                   // 游玩时长占比：最高占整行 3/4 (0.75) 面积
                   final ratio = maxPlaySeconds > 0
@@ -912,6 +945,22 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                         errorBuilder: (_, _, _) =>
                                             const SizedBox.shrink(),
                                       ),
+                                      if (hasBlurBackground)
+                                        Opacity(
+                                          opacity: g.backgroundBlurAmount.clamp(
+                                            0.0,
+                                            1.0,
+                                          ),
+                                          child: Image.file(
+                                            File(detailPath),
+                                            fit: BoxFit.cover,
+                                            cacheWidth: listCacheWidth,
+                                            cacheHeight: listCacheHeight,
+                                            filterQuality: FilterQuality.low,
+                                            errorBuilder: (_, _, _) =>
+                                                const SizedBox.shrink(),
+                                          ),
+                                        ),
                                       // 压暗与由左至右大羽化渐变蒙层
                                       DecoratedBox(
                                         decoration: BoxDecoration(
@@ -998,12 +1047,38 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                     ),
                                   ),
                                 ] else
-                                  Text(
-                                    formatPlayDuration(g.totalPlaySeconds),
-                                    style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.bgDark.withAlpha(135),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: AppColors.border.withAlpha(130),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.schedule,
+                                          size: 13,
+                                          color: AppColors.textMuted,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          formatCompactPlayDuration(
+                                            g.totalPlaySeconds,
+                                          ),
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 const SizedBox(width: 12),

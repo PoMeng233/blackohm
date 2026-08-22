@@ -100,7 +100,7 @@ class FolderCard extends StatelessWidget {
                           const SizedBox(width: 5),
                           Flexible(
                             child: Text(
-                              '$gameCount 款游戏',
+                              '$gameCount 款',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -112,7 +112,7 @@ class FolderCard extends StatelessWidget {
                           const Spacer(),
                           Flexible(
                             child: Text(
-                              formatPlayDuration(totalPlaySeconds),
+                              formatCompactPlayDuration(totalPlaySeconds),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.right,
@@ -123,15 +123,6 @@ class FolderCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 5),
-                          if (folder.includeInTotalTime)
-                            Tooltip(
-                              message: '参与主页累计时长排行',
-                              child: Icon(
-                                Icons.timer_outlined,
-                                size: 15,
-                                color: primary,
-                              ),
-                            ),
                         ],
                       ),
                       const SizedBox(height: 2),

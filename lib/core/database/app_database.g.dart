@@ -61,6 +61,21 @@ class $GameFoldersTable extends GameFolders
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _showOnHomeMeta = const VerificationMeta(
+    'showOnHome',
+  );
+  @override
+  late final GeneratedColumn<bool> showOnHome = GeneratedColumn<bool>(
+    'show_on_home',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_on_home" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -79,6 +94,7 @@ class $GameFoldersTable extends GameFolders
     name,
     sortOrder,
     includeInTotalTime,
+    showOnHome,
     createdAt,
   ];
   @override
@@ -119,6 +135,15 @@ class $GameFoldersTable extends GameFolders
         ),
       );
     }
+    if (data.containsKey('show_on_home')) {
+      context.handle(
+        _showOnHomeMeta,
+        showOnHome.isAcceptableOrUnknown(
+          data['show_on_home']!,
+          _showOnHomeMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -150,6 +175,10 @@ class $GameFoldersTable extends GameFolders
         DriftSqlType.bool,
         data['${effectivePrefix}include_in_total_time'],
       )!,
+      showOnHome: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_on_home'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -172,15 +201,18 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
   /// 排序序号
   final int sortOrder;
 
-  /// 是否将该文件夹下的游戏计入游戏库普通排序时的累计时长 / 统计聚合
-  /// 默认不计入时长排序（false），提供选项开启（true）
+  /// 旧版兼容字段：不再参与 UI 或排序逻辑。
   final bool includeInTotalTime;
+
+  /// 是否在“全部游戏”主页显示该文件夹卡片。
+  final bool showOnHome;
   final DateTime createdAt;
   const GameFolder({
     required this.id,
     required this.name,
     required this.sortOrder,
     required this.includeInTotalTime,
+    required this.showOnHome,
     required this.createdAt,
   });
   @override
@@ -190,6 +222,7 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
     map['name'] = Variable<String>(name);
     map['sort_order'] = Variable<int>(sortOrder);
     map['include_in_total_time'] = Variable<bool>(includeInTotalTime);
+    map['show_on_home'] = Variable<bool>(showOnHome);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -200,6 +233,7 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
       name: Value(name),
       sortOrder: Value(sortOrder),
       includeInTotalTime: Value(includeInTotalTime),
+      showOnHome: Value(showOnHome),
       createdAt: Value(createdAt),
     );
   }
@@ -214,6 +248,7 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
       name: serializer.fromJson<String>(json['name']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       includeInTotalTime: serializer.fromJson<bool>(json['includeInTotalTime']),
+      showOnHome: serializer.fromJson<bool>(json['showOnHome']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -225,6 +260,7 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
       'name': serializer.toJson<String>(name),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'includeInTotalTime': serializer.toJson<bool>(includeInTotalTime),
+      'showOnHome': serializer.toJson<bool>(showOnHome),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -234,12 +270,14 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
     String? name,
     int? sortOrder,
     bool? includeInTotalTime,
+    bool? showOnHome,
     DateTime? createdAt,
   }) => GameFolder(
     id: id ?? this.id,
     name: name ?? this.name,
     sortOrder: sortOrder ?? this.sortOrder,
     includeInTotalTime: includeInTotalTime ?? this.includeInTotalTime,
+    showOnHome: showOnHome ?? this.showOnHome,
     createdAt: createdAt ?? this.createdAt,
   );
   GameFolder copyWithCompanion(GameFoldersCompanion data) {
@@ -250,6 +288,9 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
       includeInTotalTime: data.includeInTotalTime.present
           ? data.includeInTotalTime.value
           : this.includeInTotalTime,
+      showOnHome: data.showOnHome.present
+          ? data.showOnHome.value
+          : this.showOnHome,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -261,14 +302,21 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
           ..write('name: $name, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('includeInTotalTime: $includeInTotalTime, ')
+          ..write('showOnHome: $showOnHome, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, sortOrder, includeInTotalTime, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    sortOrder,
+    includeInTotalTime,
+    showOnHome,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -277,6 +325,7 @@ class GameFolder extends DataClass implements Insertable<GameFolder> {
           other.name == this.name &&
           other.sortOrder == this.sortOrder &&
           other.includeInTotalTime == this.includeInTotalTime &&
+          other.showOnHome == this.showOnHome &&
           other.createdAt == this.createdAt);
 }
 
@@ -285,12 +334,14 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
   final Value<String> name;
   final Value<int> sortOrder;
   final Value<bool> includeInTotalTime;
+  final Value<bool> showOnHome;
   final Value<DateTime> createdAt;
   const GameFoldersCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.includeInTotalTime = const Value.absent(),
+    this.showOnHome = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   GameFoldersCompanion.insert({
@@ -298,6 +349,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
     required String name,
     this.sortOrder = const Value.absent(),
     this.includeInTotalTime = const Value.absent(),
+    this.showOnHome = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : name = Value(name);
   static Insertable<GameFolder> custom({
@@ -305,6 +357,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
     Expression<String>? name,
     Expression<int>? sortOrder,
     Expression<bool>? includeInTotalTime,
+    Expression<bool>? showOnHome,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -313,6 +366,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (includeInTotalTime != null)
         'include_in_total_time': includeInTotalTime,
+      if (showOnHome != null) 'show_on_home': showOnHome,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -322,6 +376,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
     Value<String>? name,
     Value<int>? sortOrder,
     Value<bool>? includeInTotalTime,
+    Value<bool>? showOnHome,
     Value<DateTime>? createdAt,
   }) {
     return GameFoldersCompanion(
@@ -329,6 +384,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
       name: name ?? this.name,
       sortOrder: sortOrder ?? this.sortOrder,
       includeInTotalTime: includeInTotalTime ?? this.includeInTotalTime,
+      showOnHome: showOnHome ?? this.showOnHome,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -348,6 +404,9 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
     if (includeInTotalTime.present) {
       map['include_in_total_time'] = Variable<bool>(includeInTotalTime.value);
     }
+    if (showOnHome.present) {
+      map['show_on_home'] = Variable<bool>(showOnHome.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -361,6 +420,7 @@ class GameFoldersCompanion extends UpdateCompanion<GameFolder> {
           ..write('name: $name, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('includeInTotalTime: $includeInTotalTime, ')
+          ..write('showOnHome: $showOnHome, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -453,6 +513,18 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         true,
         type: DriftSqlType.string,
         requiredDuringInsert: false,
+      );
+  static const VerificationMeta _backgroundBlurAmountMeta =
+      const VerificationMeta('backgroundBlurAmount');
+  @override
+  late final GeneratedColumn<double> backgroundBlurAmount =
+      GeneratedColumn<double>(
+        'background_blur_amount',
+        aliasedName,
+        false,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0.0),
       );
   static const VerificationMeta _launchArgsMeta = const VerificationMeta(
     'launchArgs',
@@ -566,6 +638,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     iconPng,
     backgroundPath,
     detailBackgroundPath,
+    backgroundBlurAmount,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -635,6 +708,15 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         detailBackgroundPath.isAcceptableOrUnknown(
           data['detail_background_path']!,
           _detailBackgroundPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('background_blur_amount')) {
+      context.handle(
+        _backgroundBlurAmountMeta,
+        backgroundBlurAmount.isAcceptableOrUnknown(
+          data['background_blur_amount']!,
+          _backgroundBlurAmountMeta,
         ),
       );
     }
@@ -732,6 +814,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.string,
         data['${effectivePrefix}detail_background_path'],
       ),
+      backgroundBlurAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}background_blur_amount'],
+      )!,
       launchArgs: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}launch_args'],
@@ -794,6 +880,9 @@ class Game extends DataClass implements Insertable<Game> {
   /// 详情弹窗专用的低分辨率模糊背景缓存路径。
   final String? detailBackgroundPath;
 
+  /// 详情背景模糊派生图覆盖原图的强度（0 = 清晰）。
+  final double backgroundBlurAmount;
+
   /// 附加启动参数。
   final String launchArgs;
 
@@ -821,6 +910,7 @@ class Game extends DataClass implements Insertable<Game> {
     this.iconPng,
     this.backgroundPath,
     this.detailBackgroundPath,
+    required this.backgroundBlurAmount,
     required this.launchArgs,
     required this.useLocaleEmulator,
     required this.leProfile,
@@ -846,6 +936,7 @@ class Game extends DataClass implements Insertable<Game> {
     if (!nullToAbsent || detailBackgroundPath != null) {
       map['detail_background_path'] = Variable<String>(detailBackgroundPath);
     }
+    map['background_blur_amount'] = Variable<double>(backgroundBlurAmount);
     map['launch_args'] = Variable<String>(launchArgs);
     map['use_locale_emulator'] = Variable<bool>(useLocaleEmulator);
     map['le_profile'] = Variable<String>(leProfile);
@@ -876,6 +967,7 @@ class Game extends DataClass implements Insertable<Game> {
       detailBackgroundPath: detailBackgroundPath == null && nullToAbsent
           ? const Value.absent()
           : Value(detailBackgroundPath),
+      backgroundBlurAmount: Value(backgroundBlurAmount),
       launchArgs: Value(launchArgs),
       useLocaleEmulator: Value(useLocaleEmulator),
       leProfile: Value(leProfile),
@@ -906,6 +998,9 @@ class Game extends DataClass implements Insertable<Game> {
       detailBackgroundPath: serializer.fromJson<String?>(
         json['detailBackgroundPath'],
       ),
+      backgroundBlurAmount: serializer.fromJson<double>(
+        json['backgroundBlurAmount'],
+      ),
       launchArgs: serializer.fromJson<String>(json['launchArgs']),
       useLocaleEmulator: serializer.fromJson<bool>(json['useLocaleEmulator']),
       leProfile: serializer.fromJson<String>(json['leProfile']),
@@ -927,6 +1022,7 @@ class Game extends DataClass implements Insertable<Game> {
       'iconPng': serializer.toJson<Uint8List?>(iconPng),
       'backgroundPath': serializer.toJson<String?>(backgroundPath),
       'detailBackgroundPath': serializer.toJson<String?>(detailBackgroundPath),
+      'backgroundBlurAmount': serializer.toJson<double>(backgroundBlurAmount),
       'launchArgs': serializer.toJson<String>(launchArgs),
       'useLocaleEmulator': serializer.toJson<bool>(useLocaleEmulator),
       'leProfile': serializer.toJson<String>(leProfile),
@@ -946,6 +1042,7 @@ class Game extends DataClass implements Insertable<Game> {
     Value<Uint8List?> iconPng = const Value.absent(),
     Value<String?> backgroundPath = const Value.absent(),
     Value<String?> detailBackgroundPath = const Value.absent(),
+    double? backgroundBlurAmount,
     String? launchArgs,
     bool? useLocaleEmulator,
     String? leProfile,
@@ -966,6 +1063,7 @@ class Game extends DataClass implements Insertable<Game> {
     detailBackgroundPath: detailBackgroundPath.present
         ? detailBackgroundPath.value
         : this.detailBackgroundPath,
+    backgroundBlurAmount: backgroundBlurAmount ?? this.backgroundBlurAmount,
     launchArgs: launchArgs ?? this.launchArgs,
     useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
     leProfile: leProfile ?? this.leProfile,
@@ -988,6 +1086,9 @@ class Game extends DataClass implements Insertable<Game> {
       detailBackgroundPath: data.detailBackgroundPath.present
           ? data.detailBackgroundPath.value
           : this.detailBackgroundPath,
+      backgroundBlurAmount: data.backgroundBlurAmount.present
+          ? data.backgroundBlurAmount.value
+          : this.backgroundBlurAmount,
       launchArgs: data.launchArgs.present
           ? data.launchArgs.value
           : this.launchArgs,
@@ -1017,6 +1118,7 @@ class Game extends DataClass implements Insertable<Game> {
           ..write('iconPng: $iconPng, ')
           ..write('backgroundPath: $backgroundPath, ')
           ..write('detailBackgroundPath: $detailBackgroundPath, ')
+          ..write('backgroundBlurAmount: $backgroundBlurAmount, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
@@ -1038,6 +1140,7 @@ class Game extends DataClass implements Insertable<Game> {
     $driftBlobEquality.hash(iconPng),
     backgroundPath,
     detailBackgroundPath,
+    backgroundBlurAmount,
     launchArgs,
     useLocaleEmulator,
     leProfile,
@@ -1058,6 +1161,7 @@ class Game extends DataClass implements Insertable<Game> {
           $driftBlobEquality.equals(other.iconPng, this.iconPng) &&
           other.backgroundPath == this.backgroundPath &&
           other.detailBackgroundPath == this.detailBackgroundPath &&
+          other.backgroundBlurAmount == this.backgroundBlurAmount &&
           other.launchArgs == this.launchArgs &&
           other.useLocaleEmulator == this.useLocaleEmulator &&
           other.leProfile == this.leProfile &&
@@ -1076,6 +1180,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<Uint8List?> iconPng;
   final Value<String?> backgroundPath;
   final Value<String?> detailBackgroundPath;
+  final Value<double> backgroundBlurAmount;
   final Value<String> launchArgs;
   final Value<bool> useLocaleEmulator;
   final Value<String> leProfile;
@@ -1092,6 +1197,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.iconPng = const Value.absent(),
     this.backgroundPath = const Value.absent(),
     this.detailBackgroundPath = const Value.absent(),
+    this.backgroundBlurAmount = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -1109,6 +1215,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.iconPng = const Value.absent(),
     this.backgroundPath = const Value.absent(),
     this.detailBackgroundPath = const Value.absent(),
+    this.backgroundBlurAmount = const Value.absent(),
     this.launchArgs = const Value.absent(),
     this.useLocaleEmulator = const Value.absent(),
     this.leProfile = const Value.absent(),
@@ -1128,6 +1235,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<Uint8List>? iconPng,
     Expression<String>? backgroundPath,
     Expression<String>? detailBackgroundPath,
+    Expression<double>? backgroundBlurAmount,
     Expression<String>? launchArgs,
     Expression<bool>? useLocaleEmulator,
     Expression<String>? leProfile,
@@ -1146,6 +1254,8 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (backgroundPath != null) 'background_path': backgroundPath,
       if (detailBackgroundPath != null)
         'detail_background_path': detailBackgroundPath,
+      if (backgroundBlurAmount != null)
+        'background_blur_amount': backgroundBlurAmount,
       if (launchArgs != null) 'launch_args': launchArgs,
       if (useLocaleEmulator != null) 'use_locale_emulator': useLocaleEmulator,
       if (leProfile != null) 'le_profile': leProfile,
@@ -1165,6 +1275,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<Uint8List?>? iconPng,
     Value<String?>? backgroundPath,
     Value<String?>? detailBackgroundPath,
+    Value<double>? backgroundBlurAmount,
     Value<String>? launchArgs,
     Value<bool>? useLocaleEmulator,
     Value<String>? leProfile,
@@ -1182,6 +1293,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       iconPng: iconPng ?? this.iconPng,
       backgroundPath: backgroundPath ?? this.backgroundPath,
       detailBackgroundPath: detailBackgroundPath ?? this.detailBackgroundPath,
+      backgroundBlurAmount: backgroundBlurAmount ?? this.backgroundBlurAmount,
       launchArgs: launchArgs ?? this.launchArgs,
       useLocaleEmulator: useLocaleEmulator ?? this.useLocaleEmulator,
       leProfile: leProfile ?? this.leProfile,
@@ -1217,6 +1329,11 @@ class GamesCompanion extends UpdateCompanion<Game> {
     if (detailBackgroundPath.present) {
       map['detail_background_path'] = Variable<String>(
         detailBackgroundPath.value,
+      );
+    }
+    if (backgroundBlurAmount.present) {
+      map['background_blur_amount'] = Variable<double>(
+        backgroundBlurAmount.value,
       );
     }
     if (launchArgs.present) {
@@ -1256,6 +1373,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
           ..write('iconPng: $iconPng, ')
           ..write('backgroundPath: $backgroundPath, ')
           ..write('detailBackgroundPath: $detailBackgroundPath, ')
+          ..write('backgroundBlurAmount: $backgroundBlurAmount, ')
           ..write('launchArgs: $launchArgs, ')
           ..write('useLocaleEmulator: $useLocaleEmulator, ')
           ..write('leProfile: $leProfile, ')
@@ -1865,6 +1983,7 @@ typedef $$GameFoldersTableCreateCompanionBuilder =
       required String name,
       Value<int> sortOrder,
       Value<bool> includeInTotalTime,
+      Value<bool> showOnHome,
       Value<DateTime> createdAt,
     });
 typedef $$GameFoldersTableUpdateCompanionBuilder =
@@ -1873,6 +1992,7 @@ typedef $$GameFoldersTableUpdateCompanionBuilder =
       Value<String> name,
       Value<int> sortOrder,
       Value<bool> includeInTotalTime,
+      Value<bool> showOnHome,
       Value<DateTime> createdAt,
     });
 
@@ -1926,6 +2046,11 @@ class $$GameFoldersTableFilterComposer
 
   ColumnFilters<bool> get includeInTotalTime => $composableBuilder(
     column: $table.includeInTotalTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showOnHome => $composableBuilder(
+    column: $table.showOnHome,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1989,6 +2114,11 @@ class $$GameFoldersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get showOnHome => $composableBuilder(
+    column: $table.showOnHome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2015,6 +2145,11 @@ class $$GameFoldersTableAnnotationComposer
 
   GeneratedColumn<bool> get includeInTotalTime => $composableBuilder(
     column: $table.includeInTotalTime,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get showOnHome => $composableBuilder(
+    column: $table.showOnHome,
     builder: (column) => column,
   );
 
@@ -2079,12 +2214,14 @@ class $$GameFoldersTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> includeInTotalTime = const Value.absent(),
+                Value<bool> showOnHome = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => GameFoldersCompanion(
                 id: id,
                 name: name,
                 sortOrder: sortOrder,
                 includeInTotalTime: includeInTotalTime,
+                showOnHome: showOnHome,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -2093,12 +2230,14 @@ class $$GameFoldersTableTableManager
                 required String name,
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> includeInTotalTime = const Value.absent(),
+                Value<bool> showOnHome = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => GameFoldersCompanion.insert(
                 id: id,
                 name: name,
                 sortOrder: sortOrder,
                 includeInTotalTime: includeInTotalTime,
+                showOnHome: showOnHome,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -2162,6 +2301,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       Value<Uint8List?> iconPng,
       Value<String?> backgroundPath,
       Value<String?> detailBackgroundPath,
+      Value<double> backgroundBlurAmount,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -2180,6 +2320,7 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<Uint8List?> iconPng,
       Value<String?> backgroundPath,
       Value<String?> detailBackgroundPath,
+      Value<double> backgroundBlurAmount,
       Value<String> launchArgs,
       Value<bool> useLocaleEmulator,
       Value<String> leProfile,
@@ -2270,6 +2411,11 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
 
   ColumnFilters<String> get detailBackgroundPath => $composableBuilder(
     column: $table.detailBackgroundPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get backgroundBlurAmount => $composableBuilder(
+    column: $table.backgroundBlurAmount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2401,6 +2547,11 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get backgroundBlurAmount => $composableBuilder(
+    column: $table.backgroundBlurAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get launchArgs => $composableBuilder(
     column: $table.launchArgs,
     builder: (column) => ColumnOrderings(column),
@@ -2491,6 +2642,11 @@ class $$GamesTableAnnotationComposer
 
   GeneratedColumn<String> get detailBackgroundPath => $composableBuilder(
     column: $table.detailBackgroundPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get backgroundBlurAmount => $composableBuilder(
+    column: $table.backgroundBlurAmount,
     builder: (column) => column,
   );
 
@@ -2607,6 +2763,7 @@ class $$GamesTableTableManager
                 Value<Uint8List?> iconPng = const Value.absent(),
                 Value<String?> backgroundPath = const Value.absent(),
                 Value<String?> detailBackgroundPath = const Value.absent(),
+                Value<double> backgroundBlurAmount = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -2623,6 +2780,7 @@ class $$GamesTableTableManager
                 iconPng: iconPng,
                 backgroundPath: backgroundPath,
                 detailBackgroundPath: detailBackgroundPath,
+                backgroundBlurAmount: backgroundBlurAmount,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,
@@ -2641,6 +2799,7 @@ class $$GamesTableTableManager
                 Value<Uint8List?> iconPng = const Value.absent(),
                 Value<String?> backgroundPath = const Value.absent(),
                 Value<String?> detailBackgroundPath = const Value.absent(),
+                Value<double> backgroundBlurAmount = const Value.absent(),
                 Value<String> launchArgs = const Value.absent(),
                 Value<bool> useLocaleEmulator = const Value.absent(),
                 Value<String> leProfile = const Value.absent(),
@@ -2657,6 +2816,7 @@ class $$GamesTableTableManager
                 iconPng: iconPng,
                 backgroundPath: backgroundPath,
                 detailBackgroundPath: detailBackgroundPath,
+                backgroundBlurAmount: backgroundBlurAmount,
                 launchArgs: launchArgs,
                 useLocaleEmulator: useLocaleEmulator,
                 leProfile: leProfile,

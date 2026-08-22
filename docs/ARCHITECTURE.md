@@ -135,7 +135,8 @@ GameFolders
   id                     INTEGER PK
   name                   TEXT
   sort_order             INTEGER
-  include_in_total_time  BOOLEAN（是否参与主页累计时长排序）
+  include_in_total_time  BOOLEAN（旧版兼容列，不再参与界面逻辑）
+  show_on_home           BOOLEAN（是否在全部游戏显示文件夹卡片）
   created_at             DATETIME
 
 PlaySessions

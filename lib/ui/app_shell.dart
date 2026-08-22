@@ -116,8 +116,12 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   }
 
   Future<void> _onDropped(List<String> paths) async {
+    final targetFolderId = ref.read(currentBrowsingFolderIdProvider);
     final svc = IngestionService(ref.read(gameRepoProvider));
-    final report = await svc.ingestDroppedPaths(paths);
+    final report = await svc.ingestDroppedPaths(
+      paths,
+      folderId: targetFolderId,
+    );
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -149,7 +153,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
         builder: (_) => ExeDecisionDialog(
           candidates: candidates,
           onSelected: (chosen) async {
-            await svc.addChosen(chosen, report);
+            await svc.addChosen(chosen, report, folderId: targetFolderId);
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

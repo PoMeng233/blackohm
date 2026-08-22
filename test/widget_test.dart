@@ -67,6 +67,14 @@ void main() {
       expect(formatPlayDuration(45), '45 秒');
     });
 
+    test('紧凑时长使用 h/m/s 且小时保留一位小数', () {
+      expect(formatCompactPlayDuration(5400), '1.5h');
+      expect(formatCompactPlayDuration(3600), '1.0h');
+      expect(formatCompactPlayDuration(3599), '59m');
+      expect(formatCompactPlayDuration(45), '45s');
+      expect(formatCompactPlayDuration(0), '0s');
+    });
+
     test('实时秒表使用稳定的数字位数', () {
       expect(formatStopwatch(83 * 1000), '01:23');
       expect(formatStopwatch((2 * 3600 + 3 * 60 + 4) * 1000), '02:03:04');

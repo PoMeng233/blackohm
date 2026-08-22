@@ -54,7 +54,12 @@ class _GameCardState extends ConsumerState<GameCard> {
     final backgroundFile = backgroundPath == null || backgroundPath.isEmpty
         ? null
         : File(backgroundPath);
-    final hasBackground = backgroundFile != null;
+    final hasBackground = backgroundFile != null && backgroundFile.existsSync();
+    final detailPath = widget.game.detailBackgroundPath;
+    final hasBlurBackground =
+        widget.game.backgroundBlurAmount > 0 &&
+        detailPath != null &&
+        File(detailPath).existsSync();
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -104,6 +109,23 @@ class _GameCardState extends ConsumerState<GameCard> {
                           cacheWidth: 360,
                           cacheHeight: 380,
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    if (hasBlurBackground)
+                      Positioned.fill(
+                        child: Opacity(
+                          opacity: widget.game.backgroundBlurAmount.clamp(
+                            0.0,
+                            1.0,
+                          ),
+                          child: Image.file(
+                            File(detailPath),
+                            fit: BoxFit.cover,
+                            cacheWidth: 360,
+                            cacheHeight: 380,
+                            filterQuality: FilterQuality.low,
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          ),
                         ),
                       ),
                     if (hasBackground)
@@ -170,23 +192,38 @@ class _GameCardState extends ConsumerState<GameCard> {
                                   ),
                                 ),
                               ] else ...[
-                                const Icon(
-                                  Icons.schedule,
-                                  size: 12,
-                                  color: AppColors.textMuted,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    formatPlayDuration(
-                                      widget.game.totalPlaySeconds,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.bgDark.withAlpha(135),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: AppColors.border.withAlpha(130),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 11,
-                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.schedule,
+                                        size: 12,
+                                        color: AppColors.textMuted,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        formatCompactPlayDuration(
+                                          widget.game.totalPlaySeconds,
+                                        ),
+                                        style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
