@@ -38,6 +38,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   double _requestedBlurAmount = 0;
   bool _preparingBlur = false;
   bool _backgroundBusy = false;
+  double? _bangumiScore;
   late String _exePath;
   late String _exeDirPath;
   late final Stream<List<PlaySession>> _sessionsStream;
@@ -57,6 +58,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _detailBackgroundPath = widget.game.detailBackgroundPath;
     _blurAmount = widget.game.backgroundBlurAmount.clamp(0.0, 1.0);
     _requestedBlurAmount = _blurAmount;
+    _bangumiScore = widget.game.bangumiScore;
     _exePath = widget.game.exePath;
     _exeDirPath = widget.game.dirPath;
     _sessionsStream = ref
@@ -291,7 +293,12 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     );
     if (chosen == null || !mounted) return;
     setState(() => _backgroundBusy = true);
-    final cached = await _backgroundCache.download(chosen.imageUrl);
+    // 搜索结果可能不含有效评分；用 Subject ID 拉取详情以取得权威 rating。
+    final detailed = chosen.id != null
+        ? await _bangumiSearch.fetchSubject(subjectId: chosen.id!, token: token)
+        : null;
+    final effective = detailed ?? chosen;
+    final cached = await _backgroundCache.download(effective.imageUrl);
     if (!mounted) return;
     if (cached == null) {
       ScaffoldMessenger.of(
@@ -310,8 +317,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
               backgroundPath: Value(cached),
               detailBackgroundPath: const Value(null),
               backgroundBlurAmount: const Value(0.0),
-              bangumiSubjectId: Value(chosen.id),
-              bangumiScore: Value(chosen.score),
+              bangumiSubjectId: Value(effective.id ?? chosen.id),
+              bangumiScore: Value(effective.score ?? chosen.score),
             ),
           );
       setState(() {
@@ -319,6 +326,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
         _detailBackgroundPath = null;
         _blurAmount = 0;
         _requestedBlurAmount = 0;
+        _bangumiScore = effective.score ?? chosen.score;
       });
     }
     if (mounted) setState(() => _backgroundBusy = false);
@@ -372,7 +380,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   }
 
   Widget _metadataChips() {
-    final score = widget.game.bangumiScore;
+    final score = _bangumiScore ?? widget.game.bangumiScore;
     return Wrap(
       spacing: 8,
       runSpacing: 6,

@@ -21,7 +21,7 @@ import 'png_encoder.dart';
 /// Platform for Win32"），直接展示会掩盖真实游戏名。
 final RegExp kBoilerplateTitlePattern = RegExp(
   r'kirikiri|krkr|\btvp\b|\bkag\b|rgss|rpg\s?maker|game\s?maker|unity|'
-  r'bgi|ethornell|nscripter|onscripter|renpy|ren\s?py|tyranobuilder|artemis|'
+  r'bgi|ethornell|exhibit|nscripter|onscripter|renpy|ren\s?py|tyranobuilder|artemis|'
   r'syrup|siglus|monogame|xna|visual\s?novel\s?maker|adventure\s?game\s?studio|'
   r'\bags\b|wolf\s?rpg|live\s?maker|\bvn\b|novel\s?engine|'
   r'microsoft|windows|directx|framework|runtime|redistribut|daemon|gog|steam',

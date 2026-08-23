@@ -46,6 +46,19 @@ class BangumiEnrichmentCoordinator {
       if (candidates.isEmpty) return;
       final chosen = pickUnique(candidates, game.title);
       if (chosen == null) return;
+      // 搜索结果常常没有有效评分；按 Subject ID 拉一次详情拿权威 rating。
+      var subject = chosen;
+      final needsScore =
+          chosen.score == null || chosen.score == 0 || chosen.id == null;
+      if (chosen.id != null && needsScore) {
+        final detail = await search.fetchSubject(
+          subjectId: chosen.id!,
+          token: token,
+        );
+        if (detail != null) subject = detail;
+      }
+      final subjectId = subject.id ?? chosen.id;
+      final score = subject.score ?? chosen.score;
       // 已有用户设置/本地背景时只补评分与条目 ID，绝不覆盖用户选图。
       final hasBackground =
           game.backgroundPath != null && game.backgroundPath!.isNotEmpty;
@@ -53,8 +66,8 @@ class BangumiEnrichmentCoordinator {
         await games.update(
           game.id,
           GamesCompanion(
-            bangumiSubjectId: Value(chosen.id),
-            bangumiScore: Value(chosen.score),
+            bangumiSubjectId: Value(subjectId),
+            bangumiScore: Value(score),
           ),
         );
         return;
@@ -67,8 +80,8 @@ class BangumiEnrichmentCoordinator {
           backgroundPath: Value(cached),
           detailBackgroundPath: const Value(null),
           backgroundBlurAmount: const Value(0.0),
-          bangumiSubjectId: Value(chosen.id),
-          bangumiScore: Value(chosen.score),
+          bangumiSubjectId: Value(subjectId),
+          bangumiScore: Value(score),
         ),
       );
     } catch (_) {
