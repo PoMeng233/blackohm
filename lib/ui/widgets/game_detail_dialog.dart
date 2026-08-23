@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/path_normalizer.dart';
 import '../../features/background/background_service.dart';
+import '../../features/scanner/pe_info.dart';
 import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -195,6 +196,16 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     }
   }
 
+  String _defaultBangumiQuery() {
+    final title = _titleCtrl.text.trim();
+    // 标题若明显是引擎/exe 名，则用当前文件夹名作为搜索词，避免搜“ExHIBIT”。
+    if (isBoilerplateTitle(title)) {
+      final dirName = _exeDirPath.split(Platform.pathSeparator).last.trim();
+      if (dirName.isNotEmpty && !isBoilerplateTitle(dirName)) return dirName;
+    }
+    return title;
+  }
+
   Future<void> _searchBangumi() async {
     final token = ref.read(settingsProvider).bangumiToken;
     if (token.trim().isEmpty) {
@@ -206,7 +217,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     final query = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        var value = normalizeBangumiSearchQuery(_titleCtrl.text);
+        var value = normalizeBangumiSearchQuery(_defaultBangumiQuery());
         return AlertDialog(
           title: const Text('搜索 Bangumi 游戏封面'),
           content: TextField(
@@ -251,8 +262,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
         SnackBar(
           content: Text(
             subjectId == null
-                ? '没有找到可用的 Bangumi 图片候选'
-                : '该 Bangumi 游戏链接未找到可用封面或不是游戏条目',
+                ? '没有找到匹配条目：请确认设置中已填写有效的 Bangumi API Token，且该 Token 有权限访问 R18 游戏'
+                : '该 Bangumi 游戏链接未找到可用封面或不是游戏条目（若为 R18 条目，请确认 Token 有权限）',
           ),
         ),
       );
