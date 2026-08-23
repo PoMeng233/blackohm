@@ -219,35 +219,72 @@ class IngestionService {
   }
 
   String _pickTitle(EnrichedCandidate c, String fallback) {
-    // 默认优先使用“目录名”，因为它通常就是游戏原标题；
-    // 只有目录名是引擎/样板/通用名（如 Game、acmp 等无意义词）才逐级回退。
+    // 不再“一刀切”按固定顺序取名字，而是给每个候选名打分：
+    //   exe 主名 / 目录名 / 描述 / 产品名
+    // 打分考虑：是否是中日文（更可能是游戏原标题）、是否引擎/通用词、
+    // 是否与目录名一致、同一名字是否在多个字段出现（出现次数）。
     final folder = fallback.trim();
-    if (_isMeaningfulTitle(folder)) return folder;
-
-    // KiriKiri 等引擎的 FileDescription 是内核自述（"TVP(KIRIKIRI) 2 core…"），
-    // 不能当游戏名；逐级回退：描述 → 产品名 → exe 文件名。
-    final d = c.description?.trim() ?? '';
-    if (_isMeaningfulTitle(d)) return d;
-    final p = c.productName?.trim() ?? '';
-    if (_isMeaningfulTitle(p)) return p;
-
     final fileName = c.path.split(Platform.pathSeparator).last;
     final lower = fileName.toLowerCase();
     final stem = lower.endsWith('.exe')
         ? fileName.substring(0, fileName.length - 4)
         : fileName;
-    if (_isMeaningfulTitle(stem)) return stem;
+    final d = c.description?.trim() ?? '';
+    final p = c.productName?.trim() ?? '';
 
-    return folder.isEmpty ? fileName : folder;
+    final choices = <_TitleChoice>[
+      _TitleChoice(stem, 0),
+      _TitleChoice(folder, 1),
+      _TitleChoice(d, 2),
+      _TitleChoice(p, 3),
+    ];
+    final normLabels =
+        choices.map((x) => _normalizeTitle(x.label)).toList(growable: false);
+    for (final x in choices) {
+      x.score =
+          _scoreTitle(x.label, x.priority, folder, normLabels);
+    }
+    choices.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      if (byScore != 0) return byScore;
+      return a.priority.compareTo(b.priority);
+    });
+    final best = choices.first;
+    return best.label.isNotEmpty ? best.label : folder;
   }
 
-  /// 判断是否为可作游戏名的标题：非空、非引擎/样板、非常见通用词。
-  bool _isMeaningfulTitle(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return false;
-    if (isBoilerplateTitle(t)) return false;
-    final lower = t.toLowerCase();
-    if (lower.length <= 2) return false;
+  double _scoreTitle(
+    String label,
+    int priority,
+    String folder,
+    List<String> normLabels,
+  ) {
+    final nl = _normalizeTitle(label);
+    if (nl.isEmpty) return -1000;
+    if (isBoilerplateTitle(label)) return -100;
+    if (_isGenericTitle(label)) return -80;
+
+    var s = 0.0;
+    if (label.length <= 2) s -= 10;
+    if (_hasCjk(label)) s += 30; // 中日文标题更可能是游戏原名
+    if (label == folder) s += 15;
+    if (priority == 1) s += 8; // 目录名作为兜底偏好
+    // 出现次数：同一名字出现在多个字段（如 exe 名 == 目录名）时加分。
+    final occurrences = normLabels
+        .where((x) =>
+            x.isNotEmpty && (x == nl || x.contains(nl) || nl.contains(x)))
+        .length;
+    if (occurrences >= 2) s += 12;
+    return s;
+  }
+
+  bool _hasCjk(String s) => RegExp(
+    r'[぀-ヿ㐀-䶿一-鿿가-힯]',
+  ).hasMatch(s);
+
+  bool _isGenericTitle(String s) {
+    final lower = s.trim().toLowerCase();
+    if (lower.length <= 2) return true;
     const generic = {
       'game', 'games', 'galgame', 'galgames', 'vn', 'visualnovel',
       'visual-novel', 'visual_novel', 'newfolder', 'new folder',
@@ -256,8 +293,10 @@ class IngestionService {
       'downloads', 'download', 'desktop', 'documents', 'folder', 'bf',
       'acmp', 'exe', 'executable', 'application', 'program',
     };
-    return !generic.contains(lower);
+    return generic.contains(lower);
   }
+
+  String _normalizeTitle(String s) => s.trim().toLowerCase();
 
   /// 批量 PE 解析：文件 IO + 资源解析 + PNG 编码全部在一次性 isolate。
   Future<List<EnrichedCandidate>> _enrich(List<ExeCandidate> candidates) {
@@ -278,4 +317,12 @@ class IngestionService {
       ];
     });
   }
+}
+
+class _TitleChoice {
+  _TitleChoice(this.label, this.priority);
+
+  final String label;
+  final int priority;
+  double score = 0;
 }
