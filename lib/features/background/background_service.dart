@@ -196,7 +196,11 @@ BangumiImageCandidate? parseBangumiGameSubjectJson(String body) {
 }
 
 BangumiImageCandidate? parseBangumiSubject(Map value) {
-  final title = (value['name_cn'] ?? value['name'] ?? '').toString().trim();
+  final name = (value['name'] ?? '').toString().trim();
+  final nameCn = (value['name_cn'] ?? '').toString().trim();
+  // 注意：很多 R18 日文条目的 name_cn 是空字符串（而非 null），
+  // 必须回退到 name，否则会把正确条目当无标题丢弃，导致“搜不到/自检误报无权限”。
+  final title = nameCn.isNotEmpty ? nameCn : name;
   final id = value['id'];
   final images = value['images'];
   if (title.isEmpty || images is! Map) return null;
@@ -211,8 +215,6 @@ BangumiImageCandidate? parseBangumiSubject(Map value) {
   final rating = value['rating'];
   final rawScore = rating is Map ? rating['score'] : null;
   final score = rawScore is num ? rawScore.toDouble() : null;
-  final name = (value['name'] ?? '').toString().trim();
-  final nameCn = (value['name_cn'] ?? '').toString().trim();
   return BangumiImageCandidate(
     title: title,
     imageUrl: image,

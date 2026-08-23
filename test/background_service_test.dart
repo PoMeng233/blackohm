@@ -80,6 +80,20 @@ void main() {
     expect(result!.score, 8.6);
   });
 
+  test('日文条目 name_cn 为空字符串时回退到 name（280839 验收）', () {
+    const body = '''{
+      "id": 280839,
+      "type": 4,
+      "name": "鍵を隠したカゴのトリ-Bird in cage hiding the key-",
+      "name_cn": "",
+      "images": {"large": "https://img/l.jpg"}
+    }''';
+    final result = parseBangumiGameSubjectJson(body);
+    expect(result, isNotNull);
+    expect(result!.title, '鍵を隠したカゴのトリ-Bird in cage hiding the key-');
+    expect(result.nameCn, isNull);
+  });
+
   test('单条 Subject 仅接受游戏且必须有图片', () {
     expect(
       parseBangumiGameSubjectJson(
