@@ -9,7 +9,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 - **事件驱动的精准计时**：通过 `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` 捕获焦点切换；`GetForegroundWindow → PID → QueryFullProcessImageNameW` 获得真实镜像路径并与游戏库 O(1) 匹配。
 - **不会把挂机计入时长**：窗口失焦、切换到浏览器、最小化、锁屏或睡眠时停止累加；仅短于 3 秒的焦点切换会合并为同一连续 Session。
 - **低资源后台守护**：焦点 watcher 运行在独立 Isolate，空闲时阻塞于 `MsgWaitForMultipleObjectsEx` 内核等待；另有每秒一次的轻量心跳兜底。
-- **拖拽扫描与多 Exe 决策**：目录扫描采用深度限制 BFS、安装器/卸载器黑名单与候选数量上限；单候选自动入库，多候选弹出选择界面。
+- **拖拽扫描与多 Exe 决策**：目录扫描采用深度限制 BFS 与候选数量上限，不按 exe 文件名、PE 产品名或游戏引擎过滤；单候选自动入库，多候选完整展示并标记已入库项。
 - **PE 元信息提取**：纯 Dart 解析 PE 资源目录，尝试提取 `FileDescription`、`ProductName`、版本字段和首选图标；DIB 图标由内置 PNG 编码器写入 SQLite Blob。
 - **Locale Emulator 集成**：每款游戏可选择 LE 启动；LEProc 路径、Profile 与参数模板均可配置。计时按最终游戏窗口镜像路径匹配，不受代理进程影响。
 - **本地优先**：Drift + SQLite 3（WAL）存储，无账户、无网络请求、无云同步依赖。
@@ -22,7 +22,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 
 ```text
 flutter analyze                         # No issues found
-flutter test                            # 43 tests passed
+flutter test                            # 55 tests passed
 flutter build windows --release         # 成功生成 blackohm.exe
 ```
 
