@@ -629,6 +629,40 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
       'REFERENCES game_folders (id)',
     ),
   );
+  static const VerificationMeta _launchCountMeta = const VerificationMeta(
+    'launchCount',
+  );
+  @override
+  late final GeneratedColumn<int> launchCount = GeneratedColumn<int>(
+    'launch_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _bangumiSubjectIdMeta = const VerificationMeta(
+    'bangumiSubjectId',
+  );
+  @override
+  late final GeneratedColumn<int> bangumiSubjectId = GeneratedColumn<int>(
+    'bangumi_subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bangumiScoreMeta = const VerificationMeta(
+    'bangumiScore',
+  );
+  @override
+  late final GeneratedColumn<double> bangumiScore = GeneratedColumn<double>(
+    'bangumi_score',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -647,6 +681,9 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     totalPlaySeconds,
     favorite,
     folderId,
+    launchCount,
+    bangumiSubjectId,
+    bangumiScore,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -777,6 +814,33 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
       );
     }
+    if (data.containsKey('launch_count')) {
+      context.handle(
+        _launchCountMeta,
+        launchCount.isAcceptableOrUnknown(
+          data['launch_count']!,
+          _launchCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bangumi_subject_id')) {
+      context.handle(
+        _bangumiSubjectIdMeta,
+        bangumiSubjectId.isAcceptableOrUnknown(
+          data['bangumi_subject_id']!,
+          _bangumiSubjectIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bangumi_score')) {
+      context.handle(
+        _bangumiScoreMeta,
+        bangumiScore.isAcceptableOrUnknown(
+          data['bangumi_score']!,
+          _bangumiScoreMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -850,6 +914,18 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.int,
         data['${effectivePrefix}folder_id'],
       ),
+      launchCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}launch_count'],
+      )!,
+      bangumiSubjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bangumi_subject_id'],
+      ),
+      bangumiScore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}bangumi_score'],
+      ),
     );
   }
 
@@ -902,6 +978,15 @@ class Game extends DataClass implements Insertable<Game> {
 
   /// 所属自定义文件夹 ID（为空表示未归类/默认未放入文件夹）。
   final int? folderId;
+
+  /// 从 BlackOhm 启动成功的次数（外部双击启动不计入）。
+  final int launchCount;
+
+  /// Bangumi 条目 ID（自动匹配成功时记录，避免重复拉取）。
+  final int? bangumiSubjectId;
+
+  /// Bangumi 评分（0-10，详情页展示）。
+  final double? bangumiScore;
   const Game({
     required this.id,
     required this.title,
@@ -919,6 +1004,9 @@ class Game extends DataClass implements Insertable<Game> {
     required this.totalPlaySeconds,
     required this.favorite,
     this.folderId,
+    required this.launchCount,
+    this.bangumiSubjectId,
+    this.bangumiScore,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -948,6 +1036,13 @@ class Game extends DataClass implements Insertable<Game> {
     map['favorite'] = Variable<bool>(favorite);
     if (!nullToAbsent || folderId != null) {
       map['folder_id'] = Variable<int>(folderId);
+    }
+    map['launch_count'] = Variable<int>(launchCount);
+    if (!nullToAbsent || bangumiSubjectId != null) {
+      map['bangumi_subject_id'] = Variable<int>(bangumiSubjectId);
+    }
+    if (!nullToAbsent || bangumiScore != null) {
+      map['bangumi_score'] = Variable<double>(bangumiScore);
     }
     return map;
   }
@@ -980,6 +1075,13 @@ class Game extends DataClass implements Insertable<Game> {
       folderId: folderId == null && nullToAbsent
           ? const Value.absent()
           : Value(folderId),
+      launchCount: Value(launchCount),
+      bangumiSubjectId: bangumiSubjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bangumiSubjectId),
+      bangumiScore: bangumiScore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bangumiScore),
     );
   }
 
@@ -1009,6 +1111,9 @@ class Game extends DataClass implements Insertable<Game> {
       totalPlaySeconds: serializer.fromJson<int>(json['totalPlaySeconds']),
       favorite: serializer.fromJson<bool>(json['favorite']),
       folderId: serializer.fromJson<int?>(json['folderId']),
+      launchCount: serializer.fromJson<int>(json['launchCount']),
+      bangumiSubjectId: serializer.fromJson<int?>(json['bangumiSubjectId']),
+      bangumiScore: serializer.fromJson<double?>(json['bangumiScore']),
     );
   }
   @override
@@ -1031,6 +1136,9 @@ class Game extends DataClass implements Insertable<Game> {
       'totalPlaySeconds': serializer.toJson<int>(totalPlaySeconds),
       'favorite': serializer.toJson<bool>(favorite),
       'folderId': serializer.toJson<int?>(folderId),
+      'launchCount': serializer.toJson<int>(launchCount),
+      'bangumiSubjectId': serializer.toJson<int?>(bangumiSubjectId),
+      'bangumiScore': serializer.toJson<double?>(bangumiScore),
     };
   }
 
@@ -1051,6 +1159,9 @@ class Game extends DataClass implements Insertable<Game> {
     int? totalPlaySeconds,
     bool? favorite,
     Value<int?> folderId = const Value.absent(),
+    int? launchCount,
+    Value<int?> bangumiSubjectId = const Value.absent(),
+    Value<double?> bangumiScore = const Value.absent(),
   }) => Game(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -1072,6 +1183,11 @@ class Game extends DataClass implements Insertable<Game> {
     totalPlaySeconds: totalPlaySeconds ?? this.totalPlaySeconds,
     favorite: favorite ?? this.favorite,
     folderId: folderId.present ? folderId.value : this.folderId,
+    launchCount: launchCount ?? this.launchCount,
+    bangumiSubjectId: bangumiSubjectId.present
+        ? bangumiSubjectId.value
+        : this.bangumiSubjectId,
+    bangumiScore: bangumiScore.present ? bangumiScore.value : this.bangumiScore,
   );
   Game copyWithCompanion(GamesCompanion data) {
     return Game(
@@ -1105,6 +1221,15 @@ class Game extends DataClass implements Insertable<Game> {
           : this.totalPlaySeconds,
       favorite: data.favorite.present ? data.favorite.value : this.favorite,
       folderId: data.folderId.present ? data.folderId.value : this.folderId,
+      launchCount: data.launchCount.present
+          ? data.launchCount.value
+          : this.launchCount,
+      bangumiSubjectId: data.bangumiSubjectId.present
+          ? data.bangumiSubjectId.value
+          : this.bangumiSubjectId,
+      bangumiScore: data.bangumiScore.present
+          ? data.bangumiScore.value
+          : this.bangumiScore,
     );
   }
 
@@ -1126,7 +1251,10 @@ class Game extends DataClass implements Insertable<Game> {
           ..write('lastPlayedAt: $lastPlayedAt, ')
           ..write('totalPlaySeconds: $totalPlaySeconds, ')
           ..write('favorite: $favorite, ')
-          ..write('folderId: $folderId')
+          ..write('folderId: $folderId, ')
+          ..write('launchCount: $launchCount, ')
+          ..write('bangumiSubjectId: $bangumiSubjectId, ')
+          ..write('bangumiScore: $bangumiScore')
           ..write(')'))
         .toString();
   }
@@ -1149,6 +1277,9 @@ class Game extends DataClass implements Insertable<Game> {
     totalPlaySeconds,
     favorite,
     folderId,
+    launchCount,
+    bangumiSubjectId,
+    bangumiScore,
   );
   @override
   bool operator ==(Object other) =>
@@ -1169,7 +1300,10 @@ class Game extends DataClass implements Insertable<Game> {
           other.lastPlayedAt == this.lastPlayedAt &&
           other.totalPlaySeconds == this.totalPlaySeconds &&
           other.favorite == this.favorite &&
-          other.folderId == this.folderId);
+          other.folderId == this.folderId &&
+          other.launchCount == this.launchCount &&
+          other.bangumiSubjectId == this.bangumiSubjectId &&
+          other.bangumiScore == this.bangumiScore);
 }
 
 class GamesCompanion extends UpdateCompanion<Game> {
@@ -1189,6 +1323,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<int> totalPlaySeconds;
   final Value<bool> favorite;
   final Value<int?> folderId;
+  final Value<int> launchCount;
+  final Value<int?> bangumiSubjectId;
+  final Value<double?> bangumiScore;
   const GamesCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -1206,6 +1343,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.totalPlaySeconds = const Value.absent(),
     this.favorite = const Value.absent(),
     this.folderId = const Value.absent(),
+    this.launchCount = const Value.absent(),
+    this.bangumiSubjectId = const Value.absent(),
+    this.bangumiScore = const Value.absent(),
   });
   GamesCompanion.insert({
     this.id = const Value.absent(),
@@ -1224,6 +1364,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.totalPlaySeconds = const Value.absent(),
     this.favorite = const Value.absent(),
     this.folderId = const Value.absent(),
+    this.launchCount = const Value.absent(),
+    this.bangumiSubjectId = const Value.absent(),
+    this.bangumiScore = const Value.absent(),
   }) : title = Value(title),
        exePath = Value(exePath),
        dirPath = Value(dirPath);
@@ -1244,6 +1387,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<int>? totalPlaySeconds,
     Expression<bool>? favorite,
     Expression<int>? folderId,
+    Expression<int>? launchCount,
+    Expression<int>? bangumiSubjectId,
+    Expression<double>? bangumiScore,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1264,6 +1410,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (totalPlaySeconds != null) 'total_play_seconds': totalPlaySeconds,
       if (favorite != null) 'favorite': favorite,
       if (folderId != null) 'folder_id': folderId,
+      if (launchCount != null) 'launch_count': launchCount,
+      if (bangumiSubjectId != null) 'bangumi_subject_id': bangumiSubjectId,
+      if (bangumiScore != null) 'bangumi_score': bangumiScore,
     });
   }
 
@@ -1284,6 +1433,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<int>? totalPlaySeconds,
     Value<bool>? favorite,
     Value<int?>? folderId,
+    Value<int>? launchCount,
+    Value<int?>? bangumiSubjectId,
+    Value<double?>? bangumiScore,
   }) {
     return GamesCompanion(
       id: id ?? this.id,
@@ -1302,6 +1454,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
       totalPlaySeconds: totalPlaySeconds ?? this.totalPlaySeconds,
       favorite: favorite ?? this.favorite,
       folderId: folderId ?? this.folderId,
+      launchCount: launchCount ?? this.launchCount,
+      bangumiSubjectId: bangumiSubjectId ?? this.bangumiSubjectId,
+      bangumiScore: bangumiScore ?? this.bangumiScore,
     );
   }
 
@@ -1360,6 +1515,15 @@ class GamesCompanion extends UpdateCompanion<Game> {
     if (folderId.present) {
       map['folder_id'] = Variable<int>(folderId.value);
     }
+    if (launchCount.present) {
+      map['launch_count'] = Variable<int>(launchCount.value);
+    }
+    if (bangumiSubjectId.present) {
+      map['bangumi_subject_id'] = Variable<int>(bangumiSubjectId.value);
+    }
+    if (bangumiScore.present) {
+      map['bangumi_score'] = Variable<double>(bangumiScore.value);
+    }
     return map;
   }
 
@@ -1381,7 +1545,10 @@ class GamesCompanion extends UpdateCompanion<Game> {
           ..write('lastPlayedAt: $lastPlayedAt, ')
           ..write('totalPlaySeconds: $totalPlaySeconds, ')
           ..write('favorite: $favorite, ')
-          ..write('folderId: $folderId')
+          ..write('folderId: $folderId, ')
+          ..write('launchCount: $launchCount, ')
+          ..write('bangumiSubjectId: $bangumiSubjectId, ')
+          ..write('bangumiScore: $bangumiScore')
           ..write(')'))
         .toString();
   }
@@ -2310,6 +2477,9 @@ typedef $$GamesTableCreateCompanionBuilder =
       Value<int> totalPlaySeconds,
       Value<bool> favorite,
       Value<int?> folderId,
+      Value<int> launchCount,
+      Value<int?> bangumiSubjectId,
+      Value<double?> bangumiScore,
     });
 typedef $$GamesTableUpdateCompanionBuilder =
     GamesCompanion Function({
@@ -2329,6 +2499,9 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<int> totalPlaySeconds,
       Value<bool> favorite,
       Value<int?> folderId,
+      Value<int> launchCount,
+      Value<int?> bangumiSubjectId,
+      Value<double?> bangumiScore,
     });
 
 final class $$GamesTableReferences
@@ -2451,6 +2624,21 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
 
   ColumnFilters<bool> get favorite => $composableBuilder(
     column: $table.favorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get launchCount => $composableBuilder(
+    column: $table.launchCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bangumiSubjectId => $composableBuilder(
+    column: $table.bangumiSubjectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get bangumiScore => $composableBuilder(
+    column: $table.bangumiScore,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2587,6 +2775,21 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get launchCount => $composableBuilder(
+    column: $table.launchCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bangumiSubjectId => $composableBuilder(
+    column: $table.bangumiSubjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get bangumiScore => $composableBuilder(
+    column: $table.bangumiScore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$GameFoldersTableOrderingComposer get folderId {
     final $$GameFoldersTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2678,6 +2881,21 @@ class $$GamesTableAnnotationComposer
 
   GeneratedColumn<bool> get favorite =>
       $composableBuilder(column: $table.favorite, builder: (column) => column);
+
+  GeneratedColumn<int> get launchCount => $composableBuilder(
+    column: $table.launchCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bangumiSubjectId => $composableBuilder(
+    column: $table.bangumiSubjectId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get bangumiScore => $composableBuilder(
+    column: $table.bangumiScore,
+    builder: (column) => column,
+  );
 
   $$GameFoldersTableAnnotationComposer get folderId {
     final $$GameFoldersTableAnnotationComposer composer = $composerBuilder(
@@ -2772,6 +2990,9 @@ class $$GamesTableTableManager
                 Value<int> totalPlaySeconds = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
+                Value<int> launchCount = const Value.absent(),
+                Value<int?> bangumiSubjectId = const Value.absent(),
+                Value<double?> bangumiScore = const Value.absent(),
               }) => GamesCompanion(
                 id: id,
                 title: title,
@@ -2789,6 +3010,9 @@ class $$GamesTableTableManager
                 totalPlaySeconds: totalPlaySeconds,
                 favorite: favorite,
                 folderId: folderId,
+                launchCount: launchCount,
+                bangumiSubjectId: bangumiSubjectId,
+                bangumiScore: bangumiScore,
               ),
           createCompanionCallback:
               ({
@@ -2808,6 +3032,9 @@ class $$GamesTableTableManager
                 Value<int> totalPlaySeconds = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
                 Value<int?> folderId = const Value.absent(),
+                Value<int> launchCount = const Value.absent(),
+                Value<int?> bangumiSubjectId = const Value.absent(),
+                Value<double?> bangumiScore = const Value.absent(),
               }) => GamesCompanion.insert(
                 id: id,
                 title: title,
@@ -2825,6 +3052,9 @@ class $$GamesTableTableManager
                 totalPlaySeconds: totalPlaySeconds,
                 favorite: favorite,
                 folderId: folderId,
+                launchCount: launchCount,
+                bangumiSubjectId: bangumiSubjectId,
+                bangumiScore: bangumiScore,
               ),
           withReferenceMapper: (p0) => p0
               .map(

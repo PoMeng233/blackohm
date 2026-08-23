@@ -17,12 +17,16 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/foundation.dart';
 
 class MemoryTrimService {
-  MemoryTrimService();
+  MemoryTrimService({this.isTrackingActive});
 
   /// 当前主窗口是否可见；AppShell 在 show/hide 时同步。
   bool windowVisible = true;
 
+  /// 若为真（有游戏正在记录/暂停中）则跳过可见态修剪，避免播放时清图卡顿。
+  final bool Function()? isTrackingActive;
+
   Timer? _timer;
+  Timer? _visibleTimer;
   Timer? _initialTimer;
   bool _started = false;
 
@@ -42,6 +46,11 @@ class MemoryTrimService {
     // 启动 90 秒后做一次首修剪（等首帧、图标、字体缓存稳定）。
     _initialTimer = Timer(const Duration(seconds: 90), _trimIfHidden);
     _timer = Timer.periodic(const Duration(minutes: 5), (_) => _trimIfHidden());
+    // 可见且空闲时也换出冷页（不清图像缓存，避免屏幕闪白）。
+    _visibleTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _trimIfVisibleIdle(),
+    );
   }
 
   /// 主窗口隐藏到托盘后调用；稍候片刻再修剪，让隐藏动画/消息排空。
@@ -54,13 +63,23 @@ class MemoryTrimService {
     if (!windowVisible) trim();
   }
 
+  /// 可见但非游玩时段：仅换出工作集，不清图像缓存（避免可见时闪白）。
+  void _trimIfVisibleIdle() {
+    if (!windowVisible) return;
+    final active = isTrackingActive?.call() ?? false;
+    if (active) return;
+    trim(clearImages: false);
+  }
+
   /// 清空图像缓存并把工作集换出。
-  void trim() {
-    try {
-      final cache = PaintingBinding.instance.imageCache;
-      cache.clear();
-      cache.clearLiveImages();
-    } catch (_) {}
+  void trim({bool clearImages = true}) {
+    if (clearImages) {
+      try {
+        final cache = PaintingBinding.instance.imageCache;
+        cache.clear();
+        cache.clearLiveImages();
+      } catch (_) {}
+    }
     try {
       _setWorkingSetSize(_getCurrentProcess(), -1, -1);
     } catch (_) {}
@@ -71,6 +90,8 @@ class MemoryTrimService {
     _initialTimer = null;
     _timer?.cancel();
     _timer = null;
+    _visibleTimer?.cancel();
+    _visibleTimer = null;
     _started = false;
   }
 }

@@ -15,11 +15,27 @@ class BangumiImageCandidate {
     required this.title,
     required this.subjectUrl,
     required this.imageUrl,
+    this.id,
+    this.score,
+    this.name,
+    this.nameCn,
   });
 
   final String title;
   final String subjectUrl;
   final String imageUrl;
+
+  /// Bangumi Subject ID（用于回写防重复拉取）。
+  final int? id;
+
+  /// 评分（0-10，来源为 Subject 的 rating.score）。
+  final double? score;
+
+  /// 原始语言名（通常为日文原名）。
+  final String? name;
+
+  /// 中文名（可为空）。
+  final String? nameCn;
 }
 
 String normalizeBangumiSearchQuery(String value) {
@@ -74,7 +90,18 @@ class BangumiImageSearchService {
     required int subjectId,
     required String token,
   }) async {
-    if (subjectId <= 0 || token.trim().isEmpty) return null;
+    return (await fetchSubjectDetailed(subjectId: subjectId, token: token))
+        .candidate;
+  }
+
+  /// 返回 HTTP 状态码与候选结果的诊断封装，便于设置页自检时给出明确提示。
+  Future<({int? statusCode, BangumiImageCandidate? candidate})> fetchSubjectDetailed({
+    required int subjectId,
+    required String token,
+  }) async {
+    if (subjectId <= 0 || token.trim().isEmpty) {
+      return (statusCode: null, candidate: null);
+    }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final request = await client.getUrl(
@@ -91,12 +118,15 @@ class BangumiImageSearchService {
         const Duration(seconds: 12),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
+        return (statusCode: response.statusCode, candidate: null);
       }
       final body = await response.transform(utf8.decoder).join();
-      return parseBangumiGameSubjectJson(body);
-    } catch (_) {
-      return null;
+      return (
+        statusCode: response.statusCode,
+        candidate: parseBangumiGameSubjectJson(body),
+      );
+    } catch (e) {
+      return (statusCode: null, candidate: null);
     } finally {
       client.close(force: true);
     }
@@ -166,7 +196,11 @@ BangumiImageCandidate? parseBangumiGameSubjectJson(String body) {
 }
 
 BangumiImageCandidate? parseBangumiSubject(Map value) {
-  final title = (value['name_cn'] ?? value['name'] ?? '').toString().trim();
+  final name = (value['name'] ?? '').toString().trim();
+  final nameCn = (value['name_cn'] ?? '').toString().trim();
+  // 注意：很多 R18 日文条目的 name_cn 是空字符串（而非 null），
+  // 必须回退到 name，否则会把正确条目当无标题丢弃，导致“搜不到/自检误报无权限”。
+  final title = nameCn.isNotEmpty ? nameCn : name;
   final id = value['id'];
   final images = value['images'];
   if (title.isEmpty || images is! Map) return null;
@@ -178,10 +212,17 @@ BangumiImageCandidate? parseBangumiSubject(Map value) {
               images['grid'])
           ?.toString();
   if (image == null || image.isEmpty) return null;
+  final rating = value['rating'];
+  final rawScore = rating is Map ? rating['score'] : null;
+  final score = rawScore is num ? rawScore.toDouble() : null;
   return BangumiImageCandidate(
     title: title,
     imageUrl: image,
     subjectUrl: id == null ? 'https://bgm.tv' : 'https://bgm.tv/subject/$id',
+    id: id is num ? id.toInt() : null,
+    score: score,
+    name: name.isEmpty ? null : name,
+    nameCn: nameCn.isEmpty ? null : nameCn,
   );
 }
 

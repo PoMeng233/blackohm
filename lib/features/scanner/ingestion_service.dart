@@ -1,10 +1,10 @@
 /// 拖拽入库服务：扫描 + PE 解析（均在独立 Isolate）+ 决策分流。
 ///
 /// 分流规则：
-///   候选 = 1  → 解析图标/名称后自动录入；
-///   候选 ≥ 2  → 返回待决策组，由 UI 弹出"启动程序决策弹窗"；
-///   候选 = 0  → 报告空目录；
-///   已入库路径 → 跳过并报告重复。
+///   总候选 ≥ 2 且至少一个未入库 → 全部富化并返回待决策组；
+///   单个未入库候选 → 解析图标/名称后自动录入；
+///   候选全部已入库 → 报告重复；
+///   候选 = 0 → 报告空目录。
 library;
 
 import 'dart:io';
@@ -28,6 +28,7 @@ class EnrichedCandidate {
     this.description,
     this.productName,
     this.icon,
+    this.alreadyAdded = false,
   });
 
   final String path;
@@ -36,17 +37,21 @@ class EnrichedCandidate {
   final String? description;
   final String? productName;
   final Uint8List? icon;
+  final bool alreadyAdded;
 }
 
 /// 一组扫描结果应走的入库分流路径。
 enum CandidateResolution { noCandidate, duplicateOnly, autoAdd, chooseMainExe }
 
-/// 仅以新候选与重复候选数量决定分流，便于独立测试 UI 决策触发条件。
+/// 以总候选、新候选与重复候选数量决定分流，便于独立测试 UI 决策触发条件。
 CandidateResolution resolveCandidateGroup({
+  required int totalCandidates,
   required int availableCandidates,
   required int duplicateCandidates,
 }) {
-  if (availableCandidates >= 2) return CandidateResolution.chooseMainExe;
+  if (totalCandidates >= 2 && availableCandidates > 0) {
+    return CandidateResolution.chooseMainExe;
+  }
   if (availableCandidates == 1) return CandidateResolution.autoAdd;
   if (duplicateCandidates > 0) return CandidateResolution.duplicateOnly;
   return CandidateResolution.noCandidate;
@@ -130,14 +135,11 @@ class IngestionService {
         () => candidate,
       );
     }
-    final candidatesToEnrich = uniqueCandidates.entries
-        .where((entry) => !existing.contains(entry.key))
-        .map((entry) => entry.value)
-        .toList(growable: false);
+    final candidatesToEnrich = uniqueCandidates.values.toList(growable: false);
 
     final enriched = candidatesToEnrich.isEmpty
         ? const <EnrichedCandidate>[]
-        : await _enrich(candidatesToEnrich);
+        : await _enrich(candidatesToEnrich, existing);
 
     // 3) 分流
     final byNorm = <String, EnrichedCandidate>{};
@@ -159,9 +161,11 @@ class IngestionService {
           .where((p) => byNorm.containsKey(p))
           .map((p) => byNorm[p]!)
           .toList();
-      final dups = normGroup.where((p) => existing.contains(p)).length;
+      final dups = live.where((candidate) => candidate.alreadyAdded).length;
+      final available = live.length - dups;
       switch (resolveCandidateGroup(
-        availableCandidates: live.length,
+        totalCandidates: live.length,
+        availableCandidates: available,
         duplicateCandidates: dups,
       )) {
         case CandidateResolution.autoAdd:
@@ -219,25 +223,117 @@ class IngestionService {
   }
 
   String _pickTitle(EnrichedCandidate c, String fallback) {
-    // KiriKiri 等引擎的 FileDescription 是内核自述（"TVP(KIRIKIRI) 2 core…"），
-    // 不能当游戏名；逐级回退：描述 → 产品名 → exe 文件名 → 目录名。
-    final d = c.description?.trim() ?? '';
-    if (!isBoilerplateTitle(d)) return d;
-    final p = c.productName?.trim() ?? '';
-    if (!isBoilerplateTitle(p)) return p;
-
+    // 不再“一刀切”按固定顺序取名字，而是给每个候选名打分：
+    //   exe 主名 / 目录名 / 描述 / 产品名
+    // 打分考虑：是否是中日文（更可能是游戏原标题）、是否引擎/通用词、
+    // 是否与目录名一致、同一名字是否在多个字段出现（出现次数）。
+    final folder = fallback.trim();
     final fileName = c.path.split(Platform.pathSeparator).last;
     final lower = fileName.toLowerCase();
     final stem = lower.endsWith('.exe')
         ? fileName.substring(0, fileName.length - 4)
         : fileName;
-    if (!isBoilerplateTitle(stem)) return stem;
+    final d = c.description?.trim() ?? '';
+    final p = c.productName?.trim() ?? '';
 
-    return fallback.isEmpty ? fileName : fallback;
+    final choices = <_TitleChoice>[
+      _TitleChoice(stem, 0),
+      _TitleChoice(folder, 1),
+      _TitleChoice(d, 2),
+      _TitleChoice(p, 3),
+    ];
+    final normLabels = choices
+        .map((x) => _normalizeTitle(x.label))
+        .toList(growable: false);
+    for (final x in choices) {
+      x.score = _scoreTitle(x.label, x.priority, folder, normLabels);
+    }
+    choices.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      if (byScore != 0) return byScore;
+      return a.priority.compareTo(b.priority);
+    });
+    final best = choices.first;
+    return best.label.isNotEmpty ? best.label : folder;
   }
 
+  double _scoreTitle(
+    String label,
+    int priority,
+    String folder,
+    List<String> normLabels,
+  ) {
+    final nl = _normalizeTitle(label);
+    if (nl.isEmpty) return -1000;
+    if (isBoilerplateTitle(label)) return -100;
+    if (_isGenericTitle(label)) return -80;
+
+    var s = 0.0;
+    if (label.length <= 2) s -= 10;
+    if (_hasCjk(label)) s += 30; // 中日文标题更可能是游戏原名
+    if (label == folder) s += 15;
+    if (priority == 1) s += 8; // 目录名作为兜底偏好
+    // 出现次数：同一名字出现在多个字段（如 exe 名 == 目录名）时加分。
+    final occurrences = normLabels
+        .where(
+          (x) => x.isNotEmpty && (x == nl || x.contains(nl) || nl.contains(x)),
+        )
+        .length;
+    if (occurrences >= 2) s += 12;
+    return s;
+  }
+
+  bool _hasCjk(String s) => RegExp(r'[぀-ヿ㐀-䶿一-鿿가-힯]').hasMatch(s);
+
+  bool _isGenericTitle(String s) {
+    final lower = s.trim().toLowerCase();
+    if (lower.length <= 2) return true;
+    const generic = {
+      'game',
+      'games',
+      'galgame',
+      'galgames',
+      'vn',
+      'visualnovel',
+      'visual-novel',
+      'visual_novel',
+      'newfolder',
+      'new folder',
+      'untitled',
+      'launcher',
+      'launch',
+      'start',
+      'main',
+      'app',
+      'run',
+      'boot',
+      'loader',
+      'setup',
+      'install',
+      'installer',
+      'uninstall',
+      'downloads',
+      'download',
+      'desktop',
+      'documents',
+      'folder',
+      'bf',
+      'acmp',
+      'exe',
+      'executable',
+      'application',
+      'program',
+    };
+    return generic.contains(lower);
+  }
+
+  String _normalizeTitle(String s) => s.trim().toLowerCase();
+
   /// 批量 PE 解析：文件 IO + 资源解析 + PNG 编码全部在一次性 isolate。
-  Future<List<EnrichedCandidate>> _enrich(List<ExeCandidate> candidates) {
+  Future<List<EnrichedCandidate>> _enrich(
+    List<ExeCandidate> candidates,
+    Set<String> existing,
+  ) {
     return Isolate.run(() {
       return [
         for (final candidate in candidates)
@@ -250,9 +346,18 @@ class IngestionService {
               description: info?.fileDescription,
               productName: info?.productName,
               icon: info?.iconPng,
+              alreadyAdded: existing.contains(normalizeExePath(candidate.path)),
             );
           }(),
       ];
     });
   }
+}
+
+class _TitleChoice {
+  _TitleChoice(this.label, this.priority);
+
+  final String label;
+  final int priority;
+  double score = 0;
 }

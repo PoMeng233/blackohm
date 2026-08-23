@@ -20,7 +20,11 @@ import 'png_encoder.dart';
 /// 而非具体游戏（典型：KiriKiri 的 "TVP(KIRIKIRI) 2 core / Scripting
 /// Platform for Win32"），直接展示会掩盖真实游戏名。
 final RegExp kBoilerplateTitlePattern = RegExp(
-  r'kirikiri|krkr|\btvp\b|\bkag\b|rgss|rpg\s?maker|game\s?maker|unity',
+  r'kirikiri|krkr|\btvp\b|\bkag\b|rgss|rpg\s?maker|game\s?maker|unity|'
+  r'bgi|ethornell|exhibit|nscripter|onscripter|renpy|ren\s?py|tyranobuilder|artemis|'
+  r'syrup|siglus|monogame|xna|visual\s?novel\s?maker|adventure\s?game\s?studio|'
+  r'\bags\b|wolf\s?rpg|live\s?maker|\bvn\b|novel\s?engine|'
+  r'microsoft|windows|directx|framework|runtime|redistribut|daemon|gog|steam',
   caseSensitive: false,
 );
 

@@ -62,6 +62,36 @@ void main() {
     expect(result!.title, '中文标题');
     expect(result.subjectUrl, 'https://bgm.tv/subject/42');
     expect(result.imageUrl, 'https://img/large.jpg');
+    expect(result.id, 42);
+    expect(result.score, isNull);
+  });
+
+  test('解析首个 Subject 时会带出评分', () {
+    const body = '''{
+      "id": 7,
+      "type": 4,
+      "name": "Game",
+      "name_cn": "游戏",
+      "images": {"large": "https://img/large.jpg"},
+      "rating": {"score": 8.6}
+    }''';
+    final result = parseBangumiGameSubjectJson(body);
+    expect(result, isNotNull);
+    expect(result!.score, 8.6);
+  });
+
+  test('日文条目 name_cn 为空字符串时回退到 name（280839 验收）', () {
+    const body = '''{
+      "id": 280839,
+      "type": 4,
+      "name": "鍵を隠したカゴのトリ-Bird in cage hiding the key-",
+      "name_cn": "",
+      "images": {"large": "https://img/l.jpg"}
+    }''';
+    final result = parseBangumiGameSubjectJson(body);
+    expect(result, isNotNull);
+    expect(result!.title, '鍵を隠したカゴのトリ-Bird in cage hiding the key-');
+    expect(result.nameCn, isNull);
   });
 
   test('单条 Subject 仅接受游戏且必须有图片', () {

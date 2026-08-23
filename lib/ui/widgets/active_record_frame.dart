@@ -1,7 +1,8 @@
 /// 仅为当前前台记录游戏绘制的轻量主题色环绕指示。
 ///
 /// 性能设计：
-///   * 以 30fps 定时器驱动（慢速光点视觉无差别），不占用 vsync 满帧率；
+///   * 保持 30fps 动画流畅度，但用 ValueNotifier 驱动 CustomPainter 重绘，
+///     而不是每帧 setState 重建整个卡片子树（避免暂停/继续时的 CPU 峰值）；
 ///   * 圆角路径度量按尺寸缓存，跨帧复用，避免每帧 computeMetrics；
 ///   * 描边内缩半个线宽，使光效弧线与卡片 BoxDecoration 圆角精确贴合；
 ///   * 主窗口隐藏到托盘时自动暂停计时器，空闲零 CPU。
@@ -10,6 +11,7 @@ library;
 import 'dart:async';
 import 'dart:ui' show PathMetric;
 
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,10 +37,10 @@ class ActiveRecordFrame extends ConsumerStatefulWidget {
 
 class _ActiveRecordFrameState extends ConsumerState<ActiveRecordFrame> {
   static const _cycleMs = 2800;
-  static const _tickMs = 33; // ~30fps
+  static const _tickMs = 33; // ~30fps，保持流畅
 
   Timer? _timer;
-  double _progress = 0;
+  final ValueNotifier<double> _progress = ValueNotifier<double>(0);
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _ActiveRecordFrameState extends ConsumerState<ActiveRecordFrame> {
   void dispose() {
     _timer?.cancel();
     _timer = null;
+    _progress.dispose();
     super.dispose();
   }
 
@@ -64,19 +67,18 @@ class _ActiveRecordFrameState extends ConsumerState<ActiveRecordFrame> {
 
   void _syncTimer() {
     if (_shouldRun) {
+      // 只推进进度，不 setState：CustomPaint 通过 repaint 监听重绘，
+      // 卡片子树不会每帧重建。
       _timer ??= Timer.periodic(const Duration(milliseconds: _tickMs), (_) {
-        setState(() {
-          _progress += _tickMs / _cycleMs;
-          if (_progress >= 1) _progress -= 1;
-        });
+        var next = _progress.value + _tickMs / _cycleMs;
+        if (next >= 1) next -= 1;
+        _progress.value = next;
       });
       return;
     }
     _timer?.cancel();
     _timer = null;
-    if (!widget.active && _progress != 0) {
-      setState(() => _progress = 0);
-    }
+    if (!widget.active && _progress.value != 0) _progress.value = 0;
   }
 
   @override
@@ -108,13 +110,13 @@ class _ActiveRecordFrameState extends ConsumerState<ActiveRecordFrame> {
 }
 
 class _ActiveRecordPainter extends CustomPainter {
-  const _ActiveRecordPainter({
+  _ActiveRecordPainter({
     required this.progress,
     required this.color,
     required this.radius,
-  });
+  }) : super(repaint: progress);
 
-  final double progress;
+  final ValueListenable<double> progress;
   final Color color;
   final double radius;
 
@@ -144,7 +146,7 @@ class _ActiveRecordPainter extends CustomPainter {
       _metricCache[key] = metric;
     }
     final length = metric.length;
-    final start = progress * length;
+    final start = progress.value * length;
     const segmentFraction = 0.18;
     final segmentLength = length * segmentFraction;
     final paint = Paint()
@@ -167,7 +169,7 @@ class _ActiveRecordPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ActiveRecordPainter oldDelegate) =>
-      oldDelegate.progress != progress ||
+      oldDelegate.progress.value != progress.value ||
       oldDelegate.color != color ||
       oldDelegate.radius != radius;
 }

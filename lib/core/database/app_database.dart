@@ -68,6 +68,15 @@ class Games extends Table {
 
   /// 所属自定义文件夹 ID（为空表示未归类/默认未放入文件夹）。
   IntColumn get folderId => integer().nullable().references(GameFolders, #id)();
+
+  /// 从 BlackOhm 启动成功的次数（外部双击启动不计入）。
+  IntColumn get launchCount => integer().withDefault(const Constant(0))();
+
+  /// Bangumi 条目 ID（自动匹配成功时记录，避免重复拉取）。
+  IntColumn get bangumiSubjectId => integer().nullable()();
+
+  /// Bangumi 评分（0-10，详情页展示）。
+  RealColumn get bangumiScore => real().nullable()();
 }
 
 /// 游戏库自定义文件夹/分类表
@@ -127,7 +136,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -152,6 +161,11 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await m.addColumn(games, games.backgroundBlurAmount);
+      }
+      if (from < 7) {
+        await m.addColumn(games, games.launchCount);
+        await m.addColumn(games, games.bangumiSubjectId);
+        await m.addColumn(games, games.bangumiScore);
       }
     },
     beforeOpen: (details) async {

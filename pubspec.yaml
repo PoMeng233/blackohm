@@ -1,7 +1,7 @@
 name: blackohm
 description: "BlackOhm — 超轻量 Windows 视觉小说资产管理与前台焦点游玩记录器"
 publish_to: "none"
-version: 0.2.2+4
+version: 0.2.3+5
 
 environment:
   sdk: ^3.12.2
@@ -34,6 +34,9 @@ dependencies:
   file_picker: ^11.0.0
 
   url_launcher: ^6.3.2
+
+  # ── 读取构建版本号（关于页显示，随 pubspec version 自动更新）──
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:

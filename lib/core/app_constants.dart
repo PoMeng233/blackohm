@@ -1,8 +1,12 @@
 /// 全局常量：防抖窗口、刷盘周期、扫描深度、Exe 黑名单等。
 library;
 
-/// 前台焦点切换防抖窗口：短于该时长的切出与切回合并为同一连续 Session。
-const Duration kFocusGracePeriod = Duration(seconds: 3);
+/// 失焦后的暂停提示窗口：卡片立即显示红色静态边框，期间不累加时间。
+const Duration kFocusPausePeriod = Duration(minutes: 1);
+
+/// 同一游戏的 Session 自动合并窗口。失焦超过 1 分钟仍保持暂停态，
+/// 直到该窗口结束才提交；历史层也以此窗口合并相邻记录。
+const Duration kFocusGracePeriod = Duration(minutes: 30);
 
 /// 活跃 Session 的刷盘周期（内存累加，低频批量提交 SQLite，避免频繁 I/O）。
 const Duration kSessionFlushInterval = Duration(seconds: 60);
@@ -20,18 +24,13 @@ const int kScanMaxDepth = 3;
 /// 目录内文件数硬上限（单层），超过则跳过该目录（防误拖系统目录）。
 const int kScanMaxEntriesPerDir = 20000;
 
-/// 常见非游戏可执行文件黑名单（不区分大小写）。
-/// 覆盖卸载器、运行库安装器、崩溃报告器、配置/安装工具等。
-final RegExp kExeBlacklist = RegExp(
-  r'^(unins.*|dxwebsetup|dxsetup|vcredist.*|vc_redist.*|crashreport.*|'
-  r'config|setting(s)?|setup|install.*|.*installer|uninst.*|'
-  r'dotnetfx.*|ndp.*|oalinstall|directx.*|langupdate.*|update.*)\.exe$',
-  caseSensitive: false,
-);
-
 /// Locale Emulator 默认启动参数模板。
 /// 占位符：`{exe}` 目标程序绝对路径，`{profile}` LE Profile 名/GUID，`{args}` 附加参数。
 /// LEProc 常见形式：
 ///   -run "{exe}"                 （按全局默认 Profile 运行）
 ///   -runas {profile} "{exe}"     （指定 Profile，如 Japan / zh-CN）
 const String kDefaultLeArgsTemplate = '-run "{exe}"';
+
+/// GitHub Releases 页面（关于页"检查更新"跳转目标）。
+const String kGitHubReleasesUrl =
+    'https://github.com/PoMeng233/blackohm/releases/latest';

@@ -4,6 +4,7 @@ import 'package:blackohm/core/database/app_database.dart';
 import 'package:blackohm/data/game_repository.dart';
 import 'package:blackohm/features/scanner/directory_scanner.dart';
 import 'package:blackohm/features/scanner/ingestion_service.dart';
+import 'package:blackohm/features/scanner/pe_info.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,7 +20,7 @@ void main() {
       if (await root.exists()) await root.delete(recursive: true);
     });
 
-    test('递归扫描子目录中的游戏 exe，并过滤安装器与配置工具', () async {
+    test('递归扫描子目录中的游戏 exe，展示全部 exe 不做名字过滤', () async {
       await _write(root, 'launcher.exe');
       await _write(root, 'unins000.exe');
       await _write(root, 'config.exe');
@@ -30,10 +31,17 @@ void main() {
       final candidates = scanForGameExes(root.path);
       final names = candidates.map((c) => _basename(c.path)).toSet();
 
-      expect(names, containsAll(<String>{'launcher.exe', 'main_game.exe'}));
-      expect(names, isNot(contains('unins000.exe')));
-      expect(names, isNot(contains('config.exe')));
-      expect(names, isNot(contains('vcredist_x64.exe')));
+      // 选择权交给用户：安装器/配置工具也作为候选展示，不做黑名单排除。
+      expect(
+        names,
+        containsAll(<String>{
+          'launcher.exe',
+          'main_game.exe',
+          'unins000.exe',
+          'config.exe',
+          'vcredist_x64.exe',
+        }),
+      );
     });
 
     test('遵守扫描深度限制，避免意外全盘递归', () async {
@@ -61,22 +69,174 @@ void main() {
   group('候选分流', () {
     test('0/1/2+ 个新候选分别走空、自动入库、主程序选择', () {
       expect(
-        resolveCandidateGroup(availableCandidates: 0, duplicateCandidates: 0),
+        resolveCandidateGroup(
+          totalCandidates: 0,
+          availableCandidates: 0,
+          duplicateCandidates: 0,
+        ),
         CandidateResolution.noCandidate,
       );
       expect(
-        resolveCandidateGroup(availableCandidates: 1, duplicateCandidates: 0),
+        resolveCandidateGroup(
+          totalCandidates: 1,
+          availableCandidates: 1,
+          duplicateCandidates: 0,
+        ),
         CandidateResolution.autoAdd,
       );
       expect(
-        resolveCandidateGroup(availableCandidates: 2, duplicateCandidates: 0),
+        resolveCandidateGroup(
+          totalCandidates: 2,
+          availableCandidates: 2,
+          duplicateCandidates: 0,
+        ),
         CandidateResolution.chooseMainExe,
       );
       expect(
-        resolveCandidateGroup(availableCandidates: 0, duplicateCandidates: 1),
+        resolveCandidateGroup(
+          totalCandidates: 1,
+          availableCandidates: 0,
+          duplicateCandidates: 1,
+        ),
         CandidateResolution.duplicateOnly,
       );
+      expect(
+        resolveCandidateGroup(
+          totalCandidates: 2,
+          availableCandidates: 1,
+          duplicateCandidates: 1,
+        ),
+        CandidateResolution.chooseMainExe,
+      );
     });
+
+    test('引擎样板名不参与筛选，所有 exe 都进入主程序选择窗口', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repo = GameRepository(db);
+      final service = IngestionService(repo);
+      final root = await Directory.systemTemp.createTemp(
+        'blackohm_all_exes_test_',
+      );
+      try {
+        await _write(root, 'ExHIBIT.exe');
+        await _write(root, 'acmp.exe');
+        await _write(root, '中文汉化补丁.exe');
+
+        final report = await service.ingestDroppedPaths([root.path]);
+
+        expect(report.added, isEmpty);
+        expect(report.pendingDecisions, hasLength(1));
+        final names = report.pendingDecisions.single
+            .map((candidate) => _basename(candidate.path))
+            .toSet();
+        expect(
+          names,
+          equals(<String>{'ExHIBIT.exe', 'acmp.exe', '中文汉化补丁.exe'}),
+        );
+        expect(await repo.watchAll().first, isEmpty);
+      } finally {
+        await db.close();
+        if (await root.exists()) await root.delete(recursive: true);
+      }
+    });
+
+    test('已入库主程序仍与设置和补丁 exe 一起进入选择窗口', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repo = GameRepository(db);
+      final service = IngestionService(repo);
+      final root = await Directory.systemTemp.createTemp(
+        'blackohm_existing_exe_test_',
+      );
+      try {
+        final mainExe = await _write(root, 'Shamrock.exe');
+        await _write(root, 'エンジン設定.exe');
+        await _write(root, 'inst.exe');
+        final initial = await service.ingestDroppedPaths([mainExe.path]);
+        expect(initial.added, hasLength(1));
+
+        final report = await service.ingestDroppedPaths([root.path]);
+
+        expect(report.added, isEmpty);
+        expect(report.pendingDecisions, hasLength(1));
+        final candidates = report.pendingDecisions.single;
+        expect(
+          candidates.map((candidate) => _basename(candidate.path)).toSet(),
+          equals(<String>{'Shamrock.exe', 'エンジン設定.exe', 'inst.exe'}),
+        );
+        final existingCandidate = candidates.singleWhere(
+          (candidate) => _basename(candidate.path) == 'Shamrock.exe',
+        );
+        expect(existingCandidate.alreadyAdded, isTrue);
+        expect(
+          candidates
+              .where((candidate) => _basename(candidate.path) != 'Shamrock.exe')
+              .every((candidate) => !candidate.alreadyAdded),
+          isTrue,
+        );
+
+        await service.addChosen(existingCandidate, report);
+        expect(report.duplicatePaths, contains(existingCandidate.path));
+        expect(await repo.watchAll().first, hasLength(1));
+      } finally {
+        await db.close();
+        if (await root.exists()) await root.delete(recursive: true);
+      }
+    });
+  });
+
+  test('目录名为游戏标题时默认用目录名而非 acmp.exe 这类 exe 名', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final repo = GameRepository(db);
+    final service = IngestionService(repo);
+    final root = await Directory.systemTemp.createTemp('blackohm_title_test_');
+    final gameDir = Directory(
+      '${root.path}${Platform.pathSeparator}鍵を隠したカゴのトリ',
+    );
+    await gameDir.create();
+    try {
+      final exe = File('${gameDir.path}${Platform.pathSeparator}acmp.exe');
+      await exe.writeAsBytes([0x4D, 0x5A]);
+      final report = await service.ingestDroppedPaths([exe.path]);
+      expect(report.added, ['鍵を隠したカゴのトリ']);
+      final games = await repo.watchAll().first;
+      expect(games.single.title, '鍵を隠したカゴのトリ');
+    } finally {
+      await db.close();
+      await root.delete(recursive: true);
+    }
+  });
+
+  test('ExHIBIT.exe 作为启动程序时标题仍默认用目录名', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final repo = GameRepository(db);
+    final service = IngestionService(repo);
+    final root = await Directory.systemTemp.createTemp(
+      'blackohm_exhibit_test_',
+    );
+    final gameDir = Directory(
+      '${root.path}${Platform.pathSeparator}鍵を隠したカゴのトリ',
+    );
+    await gameDir.create();
+    try {
+      final exe = File('${gameDir.path}${Platform.pathSeparator}ExHIBIT.exe');
+      await exe.writeAsBytes([0x4D, 0x5A]);
+      final report = await service.ingestDroppedPaths([exe.path]);
+      expect(report.added, ['鍵を隠したカゴのトリ']);
+      final games = await repo.watchAll().first;
+      expect(games.single.title, '鍵を隠したカゴのトリ');
+    } finally {
+      await db.close();
+      await root.delete(recursive: true);
+    }
+  });
+
+  test('明显是引擎名字的标题会被识别为样板，回退到文件夹名', () {
+    expect(isBoilerplateTitle('BGI - Main window'), isTrue);
+    expect(isBoilerplateTitle('Ethornell'), isTrue);
+    expect(isBoilerplateTitle('TVP(KIRIKIRI) 2 core'), isTrue);
+    expect(isBoilerplateTitle('RPG Maker'), isTrue);
+    expect(isBoilerplateTitle('愛娘という名の玩具'), isFalse);
+    expect(isBoilerplateTitle('宝石心'), isFalse);
   });
 
   test('IngestReport 的分流结果列表可安全写入', () {

@@ -5,9 +5,11 @@
 ///
 /// 状态机：
 ///   idle ──前台命中──▶ live(累加中)
-///   live ──失焦/最小化──▶ grace(≤3s，不累加，等待回归)
-///     grace ──3s 内切回同一游戏──▶ live（同一 Session 合并连续）
-///     grace ──超时 3s──▶ commit → idle
+///   live ──失焦/最小化──▶ grace（不累加，卡片红色静态边框）
+///     grace ──30 分钟内切回同一游戏──▶ live（同一 Session 继续）
+///     grace ──超过 30 分钟──▶ commit → idle
+///   失焦前 1 分钟是明确的暂停提示窗口；超过 1 分钟仍不结束 Session，
+///   保持暂停态直到该窗口结束才提交。
 ///   任意 ──锁屏/睡眠──▶ 立即 commit（无防抖）→ idle
 ///
 /// 落盘节奏：会话开始 1×INSERT；活跃期每 60s 1×UPDATE；
@@ -20,6 +22,7 @@ import 'dart:isolate';
 import '../../core/app_constants.dart';
 import '../../core/database/app_database.dart';
 import '../../data/session_repository.dart';
+import 'game_attributor.dart';
 import 'watcher/foreground_watcher.dart' as watcher_lib;
 import 'watcher/watcher_protocol.dart';
 
@@ -42,6 +45,16 @@ class TrackingPublicState {
   final TrackingPhase phase;
 
   bool get isActive => phase != TrackingPhase.idle && gameId != 0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrackingPublicState &&
+      other.gameId == gameId &&
+      other.elapsedMs == elapsedMs &&
+      other.phase == phase;
+
+  @override
+  int get hashCode => Object.hash(gameId, elapsedMs, phase);
 }
 
 enum TrackingPhase { idle, live, grace }
@@ -60,8 +73,8 @@ class TrackingEngine {
 
   final SessionRepository _sessions;
 
-  /// 标准化 exe 路径 → gameId 的 O(1) 命中索引。
-  final Map<String, int> _exeIndex = {};
+  /// 前台归因器：精确 exe 路径命中 + EVB 等包装壳的补充归因。
+  final GameAttributor _attributor = GameAttributor();
 
   _ActiveSession? _active;
   bool _paused = false;
@@ -96,9 +109,7 @@ class TrackingEngine {
 
   /// 游戏库变化时重建命中索引（拖拽入库 / 删除后自动生效，无需重启）。
   void rebuildIndex(List<Game> games) {
-    _exeIndex
-      ..clear()
-      ..addEntries(games.map((g) => MapEntry(g.exePath, g.id)));
+    _attributor.rebuild(games);
   }
 
   /// 启动引擎：spawn watcher isolate + 1s 精算 tick。
@@ -172,9 +183,12 @@ class TrackingEngine {
   }
 
   void _onSnapshot(ForegroundSnapshot s) {
-    final gameId = (s.visible && s.imagePath != null)
-        ? _exeIndex[s.imagePath!]
-        : null;
+    final gameId = _attributor.resolve(
+      imagePath: s.imagePath,
+      commandLine: s.commandLine,
+      windowTitle: s.windowTitle,
+      visible: s.visible,
+    );
     if (gameId == null) {
       _enterGraceIfNeeded();
       return;

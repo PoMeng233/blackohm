@@ -6,9 +6,11 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
+import '../../data/settings_repository.dart';
 import '../../features/background/background_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -25,6 +27,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _leArgsCtrl;
   late final TextEditingController _leProfileCtrl;
   late final TextEditingController _bangumiTokenCtrl;
+  bool _testingToken = false;
 
   @override
   void initState() {
@@ -57,6 +60,61 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
     if (_bangumiTokenCtrl.text != s.bangumiToken) {
       _bangumiTokenCtrl.text = s.bangumiToken;
+    }
+  }
+
+  Future<void> _testBangumiToken() async {
+    // 优先使用“设置状态/持久化”里的 token（与真正请求走同一条路径），
+    // 避免输入框与已保存值不一致导致的“看似填了其实没保存”问题。
+    final saved = ref.read(settingsProvider).bangumiToken.trim();
+    final controllerText = _bangumiTokenCtrl.text.trim();
+    final token = controllerText.isNotEmpty ? controllerText : saved;
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先粘贴 Bangumi API Token')),
+      );
+      return;
+    }
+
+    // 自检持久化是否与输入框一致（排查缓存/未保存问题）。
+    final persisted = await ref
+        .read(settingsRepoProvider)
+        .get(SettingsKeys.bangumiToken);
+    if (!mounted) return;
+    final storageMismatch =
+        persisted.trim().isNotEmpty &&
+        persisted.trim() != token;
+
+    setState(() => _testingToken = true);
+    final result = await BangumiImageSearchService().fetchSubjectDetailed(
+      subjectId: 280839,
+      token: token,
+    );
+    if (!mounted) return;
+    setState(() => _testingToken = false);
+
+    final status = result.statusCode;
+    if (result.candidate != null) {
+      final extra = storageMismatch
+          ? '（注意：输入框与已保存值不一致，可能尚未保存成功）'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Token 有效：${result.candidate!.title}$extra')),
+      );
+    } else if (status == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网络异常/超时，无法连接 Bangumi API')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            storageMismatch
+                ? 'Token 无效或无 R18 权限（HTTP $status），且输入框与已保存值不一致'
+                : 'Token 无效或无 R18 权限（HTTP $status）',
+          ),
+        ),
+      );
     }
   }
 
@@ -206,6 +264,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
+                    TextButton.icon(
+                      icon: _testingToken
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.verified_rounded, size: 17),
+                      label: const Text('测试 Token'),
+                      onPressed: _testingToken ? null : _testBangumiToken,
+                    ),
                   ],
                 ),
               ],
@@ -332,21 +401,53 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         const SizedBox(height: 24),
         _sectionTitle('关于 BlackOhm · 视觉小说记录器'),
         const SizedBox(height: 10),
-        const Card(
+        Card(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'BlackOhm · Visual Novel Recorder',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    const Text(
+                      'BlackOhm · Visual Novel Recorder',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 版本号随构建自动更新（读取 pubspec version）。
+                    FutureBuilder<PackageInfo>(
+                      future: PackageInfo.fromPlatform(),
+                      builder: (context, snapshot) {
+                        final v = snapshot.data;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(26),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            v == null ? '…' : 'v${v.version}',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                SizedBox(height: 6),
-                Text(
+                const SizedBox(height: 6),
+                const Text(
                   '专为视觉小说设计的本地游玩记录器。\n'
                   '• 只记录真正处于前台焦点的游玩时间\n'
                   '• 不上传游戏路径、存档或游玩记录\n'
@@ -356,6 +457,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     fontSize: 12,
                     height: 1.5,
                   ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.rocket_launch_outlined, size: 17),
+                      label: const Text('前往 Releases 检查更新'),
+                      onPressed: () => launchUrl(
+                        Uri.parse(kGitHubReleasesUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
