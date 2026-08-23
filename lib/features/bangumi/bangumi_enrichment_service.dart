@@ -13,6 +13,7 @@ import '../../core/database/app_database.dart';
 import '../../data/game_repository.dart';
 import '../background/background_service.dart';
 import '../background/bangumi_title_matcher.dart';
+import '../scanner/pe_info.dart';
 
 class BangumiEnrichmentCoordinator {
   BangumiEnrichmentCoordinator({
@@ -42,9 +43,10 @@ class BangumiEnrichmentCoordinator {
   Future<void> _enrich(Game game, String token) async {
     // 网络/IO 失败不回滚，也不重试（本次会话只试一次，避免每次库变更都拉网络）。
     try {
-      final candidates = await search.search(query: game.title, token: token);
+      final query = searchQueryForGame(game);
+      final candidates = await search.search(query: query, token: token);
       if (candidates.isEmpty) return;
-      final chosen = pickUnique(candidates, game.title);
+      final chosen = pickUnique(candidates, query);
       if (chosen == null) return;
       // 搜索结果常常没有有效评分；按 Subject ID 拉一次详情拿权威 rating。
       var subject = chosen;
@@ -87,6 +89,34 @@ class BangumiEnrichmentCoordinator {
     } catch (_) {
       // 静默：富化是可选增强，不打扰用户。
     }
+  }
+
+  /// 选取最可能命中的搜索词：若标题明显是引擎/exe 名（如 ExHIBIT、BGI），
+  /// 回退到当前文件夹名，避免拿“ExHIBIT”去搜而永远搜不到。
+  static String searchQueryForGame(Game game) {
+    final title = game.title.trim();
+    if (title.isEmpty) return '';
+    if (isBoilerplateTitle(title)) {
+      final dirName = _basename(game.dirPath);
+      if (dirName.isNotEmpty && !isBoilerplateTitle(dirName)) return dirName;
+    }
+    final exeStem = _exeStem(game.exePath);
+    if (title.toLowerCase() == exeStem.toLowerCase()) {
+      final dirName = _basename(game.dirPath);
+      if (dirName.isNotEmpty && dirName.toLowerCase() != title.toLowerCase()) {
+        return dirName;
+      }
+    }
+    return title;
+  }
+
+  static String _basename(String p) => p.replaceAll('\\', '/').split('/').last;
+
+  static String _exeStem(String path) {
+    final name = _basename(path).toLowerCase();
+    return name.endsWith('.exe')
+        ? name.substring(0, name.length - 4)
+        : name;
   }
 
   /// 保守选图：交由标题匹配器判断，单个错误结果也绝不采用。

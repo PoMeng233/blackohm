@@ -1,7 +1,28 @@
+import 'package:blackohm/core/database/app_database.dart';
 import 'package:blackohm/features/background/background_service.dart';
 import 'package:blackohm/features/background/bangumi_title_matcher.dart';
 import 'package:blackohm/features/bangumi/bangumi_enrichment_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+Game _game({
+  required int id,
+  required String title,
+  required String exePath,
+  required String dirPath,
+}) => Game(
+  id: id,
+  title: title,
+  exePath: exePath,
+  dirPath: dirPath,
+  backgroundBlurAmount: 0,
+  launchArgs: '',
+  useLocaleEmulator: false,
+  leProfile: '',
+  createdAt: DateTime(2026, 1, 1),
+  totalPlaySeconds: 0,
+  favorite: false,
+  launchCount: 0,
+);
 
 BangumiImageCandidate _c(
   String title, {
@@ -31,9 +52,7 @@ void main() {
     });
 
     test('键隠すカゴのトリ不会匹配到「100门挑战」', () {
-      final wrong = [
-        _c('100门挑战 - 找到厕所的钥匙', id: 999, nameCn: '100门挑战 - 找到厕所的钥匙'),
-      ];
+      final wrong = [_c('100门挑战 - 找到厕所的钥匙', id: 999, nameCn: '100门挑战 - 找到厕所的钥匙')];
       expect(BangumiTitleMatcher.pickBest(wrong, '鍵を隠したカゴのトリ'), isNull);
     });
 
@@ -52,6 +71,31 @@ void main() {
         _c('花吻', id: 200, nameCn: '花吻'),
       ];
       expect(BangumiTitleMatcher.pickBest(list, '无关查询'), isNull);
+    });
+  });
+
+  group('搜索词回退', () {
+    test('标题为引擎/exe名时用文件夹名搜索', () {
+      final g = _game(
+        id: 1,
+        title: 'ExHIBIT',
+        exePath: r'g:\galgame\kagotori\ExHIBIT.exe',
+        dirPath: r'g:\galgame\kagotori',
+      );
+      expect(BangumiEnrichmentCoordinator.searchQueryForGame(g), 'kagotori');
+    });
+
+    test('标题已是真实游戏名时直接用标题', () {
+      final g = _game(
+        id: 2,
+        title: '愛娘という名の玩具',
+        exePath: r'g:\galgame\aimusume\game.exe',
+        dirPath: r'g:\galgame\aimusume',
+      );
+      expect(
+        BangumiEnrichmentCoordinator.searchQueryForGame(g),
+        '愛娘という名の玩具',
+      );
     });
   });
 
