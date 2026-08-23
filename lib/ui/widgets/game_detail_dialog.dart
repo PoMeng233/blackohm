@@ -310,6 +310,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
               backgroundPath: Value(cached),
               detailBackgroundPath: const Value(null),
               backgroundBlurAmount: const Value(0.0),
+              bangumiSubjectId: Value(chosen.id),
+              bangumiScore: Value(chosen.score),
             ),
           );
       setState(() {
