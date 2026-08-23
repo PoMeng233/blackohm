@@ -4,6 +4,7 @@ import 'package:blackohm/core/database/app_database.dart';
 import 'package:blackohm/data/game_repository.dart';
 import 'package:blackohm/features/scanner/directory_scanner.dart';
 import 'package:blackohm/features/scanner/ingestion_service.dart';
+import 'package:blackohm/features/scanner/pe_info.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,6 +78,15 @@ void main() {
         CandidateResolution.duplicateOnly,
       );
     });
+  });
+
+  test('明显是引擎名字的标题会被识别为样板，回退到文件夹名', () {
+    expect(isBoilerplateTitle('BGI - Main window'), isTrue);
+    expect(isBoilerplateTitle('Ethornell'), isTrue);
+    expect(isBoilerplateTitle('TVP(KIRIKIRI) 2 core'), isTrue);
+    expect(isBoilerplateTitle('RPG Maker'), isTrue);
+    expect(isBoilerplateTitle('愛娘という名の玩具'), isFalse);
+    expect(isBoilerplateTitle('宝石心'), isFalse);
   });
 
   test('IngestReport 的分流结果列表可安全写入', () {

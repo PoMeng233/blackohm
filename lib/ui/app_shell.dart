@@ -37,6 +37,8 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    // 触发 Bangumi 自动富化监听（新增游戏后异步拉评分/封面）。
+    ref.read(bangumiEnrichmentProvider);
     _initTray();
   }
 
@@ -47,7 +49,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
         final g = await ref.read(gameRepoProvider).watchById(id).first;
         if (g != null) {
           final s = ref.read(settingsProvider);
-          await launcher.launch(g, s);
+          await launcher.launch(g, s, games: ref.read(gameRepoProvider));
         }
       },
       onTogglePause: () {

@@ -47,8 +47,9 @@ class GameRepository {
     return q.map((row) => row.read(_db.games.iconPng)).getSingleOrNull();
   }
 
-  static List<Game> _stripIcons(List<Game> rows) =>
-      [for (final g in rows) g.copyWith(iconPng: const Value(null))];
+  static List<Game> _stripIcons(List<Game> rows) => [
+    for (final g in rows) g.copyWith(iconPng: const Value(null)),
+  ];
 
   Stream<Game?> watchById(int id) {
     final q = _db.select(_db.games)..where((g) => g.id.equals(id));
@@ -70,6 +71,14 @@ class GameRepository {
 
   Future<int> delete(int id) =>
       (_db.delete(_db.games)..where((g) => g.id.equals(id))).go();
+
+  /// 从 BlackOhm 成功启动一次（count 冗余缓存，详情页展示）。
+  Future<void> incrementLaunchCount(int gameId) {
+    final q = _db.update(_db.games)..where((g) => g.id.equals(gameId));
+    return q.write(
+      GamesCompanion.custom(launchCount: _db.games.launchCount + Variable(1)),
+    );
+  }
 
   /// 焦点引擎命中后的轻量维护：启动时间戳 + 总时长增量（会话提交时调用）。
   Future<void> addPlayedSeconds(int gameId, int seconds) {

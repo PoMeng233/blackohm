@@ -50,6 +50,8 @@ class _GameCardState extends ConsumerState<GameCard> {
     );
     final isActive = activeState.isActive;
     final isLive = activeState.phase == TrackingPhase.live;
+    final isGrace = activeState.phase == TrackingPhase.grace;
+    final trackingColor = isGrace ? AppColors.error : context.interactiveColor;
     final backgroundPath = widget.game.backgroundPath;
     final backgroundFile = backgroundPath == null || backgroundPath.isEmpty
         ? null
@@ -68,7 +70,7 @@ class _GameCardState extends ConsumerState<GameCard> {
         onSecondaryTapUp: (details) => _showContextMenu(context, details),
         child: ActiveRecordFrame(
           active: isLive,
-          color: context.interactiveColor,
+          color: trackingColor,
           radius: 10,
           child: Stack(
             clipBehavior: Clip.none,
@@ -79,14 +81,18 @@ class _GameCardState extends ConsumerState<GameCard> {
                   color: _hovering ? AppColors.surfaceHover : AppColors.surface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isActive
-                        ? context.interactiveColor
-                        : (widget.game.favorite
-                              ? const Color(0xFFFFC857)
-                              : (_hovering
-                                    ? AppColors.border
-                                    : Colors.transparent)),
-                    width: isActive || widget.game.favorite ? 1.5 : 1,
+                    color: isGrace
+                        ? AppColors.error
+                        : (isActive
+                              ? context.interactiveColor
+                              : (widget.game.favorite
+                                    ? const Color(0xFFFFC857)
+                                    : (_hovering
+                                          ? AppColors.border
+                                          : Colors.transparent))),
+                    width: isActive || isGrace || widget.game.favorite
+                        ? 1.5
+                        : 1,
                   ),
                   boxShadow: widget.game.favorite
                       ? [
@@ -175,7 +181,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                                   width: 7,
                                   height: 7,
                                   decoration: BoxDecoration(
-                                    color: context.interactiveColor,
+                                    color: trackingColor,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -183,7 +189,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 Text(
                                   formatStopwatch(activeState.elapsedMs),
                                   style: TextStyle(
-                                    color: context.interactiveColor,
+                                    color: trackingColor,
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     fontFeatures: [

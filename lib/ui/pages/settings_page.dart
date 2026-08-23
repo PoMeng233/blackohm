@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
@@ -332,21 +333,53 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         const SizedBox(height: 24),
         _sectionTitle('关于 BlackOhm · 视觉小说记录器'),
         const SizedBox(height: 10),
-        const Card(
+        Card(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'BlackOhm · Visual Novel Recorder',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    const Text(
+                      'BlackOhm · Visual Novel Recorder',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 版本号随构建自动更新（读取 pubspec version）。
+                    FutureBuilder<PackageInfo>(
+                      future: PackageInfo.fromPlatform(),
+                      builder: (context, snapshot) {
+                        final v = snapshot.data;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(26),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            v == null ? '…' : 'v${v.version}',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                SizedBox(height: 6),
-                Text(
+                const SizedBox(height: 6),
+                const Text(
                   '专为视觉小说设计的本地游玩记录器。\n'
                   '• 只记录真正处于前台焦点的游玩时间\n'
                   '• 不上传游戏路径、存档或游玩记录\n'
@@ -356,6 +389,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     fontSize: 12,
                     height: 1.5,
                   ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.rocket_launch_outlined, size: 17),
+                      label: const Text('前往 Releases 检查更新'),
+                      onPressed: () => launchUrl(
+                        Uri.parse(kGitHubReleasesUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

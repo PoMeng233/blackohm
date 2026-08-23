@@ -35,6 +35,9 @@ dependencies:
 
   url_launcher: ^6.3.2
 
+  # ── 读取构建版本号（关于页显示，随 pubspec version 自动更新）──
+  package_info_plus: ^8.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

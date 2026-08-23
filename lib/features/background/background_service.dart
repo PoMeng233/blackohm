@@ -15,11 +15,27 @@ class BangumiImageCandidate {
     required this.title,
     required this.subjectUrl,
     required this.imageUrl,
+    this.id,
+    this.score,
+    this.name,
+    this.nameCn,
   });
 
   final String title;
   final String subjectUrl;
   final String imageUrl;
+
+  /// Bangumi Subject ID（用于回写防重复拉取）。
+  final int? id;
+
+  /// 评分（0-10，来源为 Subject 的 rating.score）。
+  final double? score;
+
+  /// 原始语言名（通常为日文原名）。
+  final String? name;
+
+  /// 中文名（可为空）。
+  final String? nameCn;
 }
 
 String normalizeBangumiSearchQuery(String value) {
@@ -178,10 +194,19 @@ BangumiImageCandidate? parseBangumiSubject(Map value) {
               images['grid'])
           ?.toString();
   if (image == null || image.isEmpty) return null;
+  final rating = value['rating'];
+  final rawScore = rating is Map ? rating['score'] : null;
+  final score = rawScore is num ? rawScore.toDouble() : null;
+  final name = (value['name'] ?? '').toString().trim();
+  final nameCn = (value['name_cn'] ?? '').toString().trim();
   return BangumiImageCandidate(
     title: title,
     imageUrl: image,
     subjectUrl: id == null ? 'https://bgm.tv' : 'https://bgm.tv/subject/$id',
+    id: id is num ? id.toInt() : null,
+    score: score,
+    name: name.isEmpty ? null : name,
+    nameCn: nameCn.isEmpty ? null : nameCn,
   );
 }
 

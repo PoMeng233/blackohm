@@ -57,7 +57,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   Future<void> _launchGame(Game game, LaunchService launcher) async {
-    final ok = await launcher.launch(game, ref.read(settingsProvider));
+    final ok = await launcher.launch(
+      game,
+      ref.read(settingsProvider),
+      games: ref.read(gameRepoProvider),
+    );
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('运行文件失败，请检查路径或 Locale Emulator 配置')),

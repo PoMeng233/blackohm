@@ -44,6 +44,14 @@ Future<Isolate> spawnForegroundWatcher(SendPort replyTo) {
 /// 主 isolate 调用：触发 watcher 优雅关机（内核 Event 跨 isolate 有效）。
 void signalShutdown(int eventHandle) => w.setEvent(eventHandle);
 
+/// 判断进程镜像路径是否位于临时目录（EVB 等单文件壳的影子 stub 特征）。
+bool _isTempPath(String imagePath) {
+  final p = imagePath.toLowerCase();
+  return p.contains(r'\appdata\local\temp\') ||
+      p.startsWith(r'c:\windows\temp\') ||
+      p.contains(r'\temp\evb');
+}
+
 void _watcherMain(_WatcherConfig config) {
   final reply = config.replyTo;
 
@@ -57,6 +65,7 @@ void _watcherMain(_WatcherConfig config) {
   var lastHwnd = -1;
   var lastPid = -1;
   String? lastPath;
+  String? lastCommandLine;
   var lastVisible = false;
   var locked = false;
   var suspended = false;
@@ -65,6 +74,7 @@ void _watcherMain(_WatcherConfig config) {
     lastHwnd = -1;
     lastPid = -1;
     lastPath = null;
+    lastCommandLine = null;
     lastVisible = false;
   }
 
@@ -76,6 +86,7 @@ void _watcherMain(_WatcherConfig config) {
           hwnd: 0,
           pid: 0,
           imagePath: null,
+          commandLine: null,
           windowTitle: '',
           visible: false,
         ),
@@ -84,30 +95,41 @@ void _watcherMain(_WatcherConfig config) {
     }
     final pid = w.pidForWindow(hwnd);
     String? imagePath;
+    String? commandLine;
     if (pid != 0) {
       final hProc = w.openProcessQuery(pid);
       if (hProc != 0) {
         final raw = w.queryProcessImagePath(hProc);
+        if (raw != null) {
+          imagePath = normalizeExePath(w.getLongPathName(raw));
+          // 仅对位于临时目录的进程采集命令行：这是 EVB 等单文件壳
+          // 把窗口宿主放到 %TEMP%\evbXXXX.tmp 的特征，用于补充归因。
+          if (_isTempPath(imagePath)) {
+            commandLine = w.queryProcessCommandLine(hProc);
+          }
+        }
         w.closeHandle(hProc);
-        if (raw != null) imagePath = normalizeExePath(w.getLongPathName(raw));
       }
     }
     final visible = w.isWindowVisible(hwnd) && !w.isIconic(hwnd);
     if (hwnd == lastHwnd &&
         pid == lastPid &&
         imagePath == lastPath &&
+        commandLine == lastCommandLine &&
         visible == lastVisible) {
       return;
     }
     lastHwnd = hwnd;
     lastPid = pid;
     lastPath = imagePath;
+    lastCommandLine = commandLine;
     lastVisible = visible;
     reply.send(
       ForegroundSnapshot(
         hwnd: hwnd,
         pid: pid,
         imagePath: imagePath,
+        commandLine: commandLine,
         windowTitle: w.windowText(hwnd),
         visible: visible,
       ),

@@ -22,6 +22,7 @@ final class ForegroundSnapshot extends WatcherEvent {
     required this.hwnd,
     required this.pid,
     required this.imagePath,
+    required this.commandLine,
     required this.windowTitle,
     required this.visible,
   });
@@ -31,6 +32,10 @@ final class ForegroundSnapshot extends WatcherEvent {
 
   /// 已标准化（小写、长路径、统一反斜杠）的进程镜像绝对路径。
   final String? imagePath;
+
+  /// 前台进程命令行（仅当镜像路径位于临时目录、怀疑是包装壳 stub 时采集；
+  /// 其余场景为 null）。用于把 EVB 等单文件壳的随机临时名归因到库内游戏。
+  final String? commandLine;
   final String windowTitle;
   final bool visible;
 }

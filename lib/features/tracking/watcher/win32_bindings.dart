@@ -42,6 +42,9 @@ const int notifyForThisSession = 0;
 
 const int deviceNotifyWindowHandle = 0x00000000;
 
+// NtQueryInformationProcess 的 ProcessCommandLineInformation 类（60）。
+const int processCommandLineInformation = 60;
+
 // ─────────────────────────────────────────────────────────────
 // 结构体
 // ─────────────────────────────────────────────────────────────
@@ -126,6 +129,7 @@ typedef WndProcNative = IntPtr Function(IntPtr, Uint32, IntPtr, IntPtr);
 final DynamicLibrary _user32 = DynamicLibrary.open('user32.dll');
 final DynamicLibrary _kernel32 = DynamicLibrary.open('kernel32.dll');
 final DynamicLibrary _wtsapi32 = DynamicLibrary.open('wtsapi32.dll');
+final DynamicLibrary _ntdll = DynamicLibrary.open('ntdll.dll');
 
 // ─── user32 ──────────────────────────────────────────────────
 final int Function(
@@ -337,6 +341,14 @@ final int Function(int) _wtsUnRegisterSessionNotification = _wtsapi32
       'WTSUnRegisterSessionNotification',
     );
 
+// ─── ntdll ───────────────────────────────────────────────────
+final int Function(int, int, Pointer<Void>, int, Pointer<Uint32>)
+_ntQueryInformationProcess = _ntdll
+    .lookupFunction<
+      Int32 Function(IntPtr, Int32, Pointer<Void>, Uint32, Pointer<Uint32>),
+      int Function(int, int, Pointer<Void>, int, Pointer<Uint32>)
+    >('NtQueryInformationProcess');
+
 // ─────────────────────────────────────────────────────────────
 // Dart 友好包装
 // ─────────────────────────────────────────────────────────────
@@ -510,6 +522,59 @@ String? queryProcessImagePath(int processHandle) {
     calloc.free(buf);
     calloc.free(size);
   }
+}
+
+/// 读取另一进程的命令行（通过 NtQueryInformationProcess 的
+/// ProcessCommandLineInformation 类，直接返回 UNICODE_STRING，无需读 PEB）。
+/// 仅配合 [openProcessQuery] 返回的句柄使用；失败或空返回 null。
+String? queryProcessCommandLine(int processHandle) {
+  final sizeBuf = calloc<Uint32>();
+  var status = _ntQueryInformationProcess(
+    processHandle,
+    processCommandLineInformation,
+    nullptr,
+    0,
+    sizeBuf,
+  );
+  final needed = sizeBuf.value;
+  calloc.free(sizeBuf);
+  // 首次调用通常返回 STATUS_INFO_LENGTH_MISMATCH 并写回所需长度；
+  // 查询不到或不需要缓冲区时视为无命令行。
+  if (needed < 16) return null;
+
+  final buf = calloc<Uint8>(needed);
+  final retLen = calloc<Uint32>();
+  status = _ntQueryInformationProcess(
+    processHandle,
+    processCommandLineInformation,
+    buf.cast(),
+    needed,
+    retLen,
+  );
+  if (status != 0) {
+    calloc.free(buf);
+    calloc.free(retLen);
+    return null;
+  }
+
+  final u16 = buf.cast<Uint16>();
+  final lengthBytes = u16[0];
+  final ptr = buf.cast<Uint64>()[1];
+  final offsetBytes = ptr - buf.address;
+
+  final sb = StringBuffer();
+  if (offsetBytes >= 0 && offsetBytes < needed) {
+    final start = offsetBytes ~/ 2;
+    final count = lengthBytes ~/ 2;
+    final end = start + count;
+    final maxEnd = needed ~/ 2;
+    for (var i = start; i < end && i < maxEnd; i++) {
+      sb.writeCharCode(u16[i]);
+    }
+  }
+  calloc.free(buf);
+  calloc.free(retLen);
+  return sb.toString();
 }
 
 String getLongPathName(String path) {

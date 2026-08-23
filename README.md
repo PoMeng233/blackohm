@@ -22,7 +22,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 
 ```text
 flutter analyze                         # No issues found
-flutter test                            # 13 tests passed
+flutter test                            # 43 tests passed
 flutter build windows --release         # 成功生成 blackohm.exe
 ```
 
@@ -118,6 +118,7 @@ lib/
 │   │       ├── win32_bindings.dart       # 手写 Windows FFI
 │   │       └── watcher_protocol.dart
 │   ├── scanner/                          # BFS、PE 资源、PNG、入库分流
+│   ├── bangumi/                          # 新增游戏后自动拉取评分/封面
 │   ├── launcher/                         # 直启与 Locale Emulator
 │   └── tray/                             # tray_manager 服务
 ├── ui/                                   # Shell、拖拽、页面、卡片、弹窗

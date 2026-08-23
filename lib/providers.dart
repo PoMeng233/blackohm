@@ -12,6 +12,8 @@ import 'data/folder_repository.dart';
 import 'data/game_repository.dart';
 import 'data/session_repository.dart';
 import 'data/settings_repository.dart';
+import 'features/background/background_service.dart';
+import 'features/bangumi/bangumi_enrichment_service.dart';
 import 'features/memory/memory_trim_service.dart';
 import 'features/tracking/tracking_engine.dart';
 import 'ui/theme.dart';
@@ -90,7 +92,9 @@ final gameIconProvider = FutureProvider.family<Uint8List?, int>((ref, id) {
 // ── 内存治理 ──────────────────────────────────────────────────
 /// 托盘/空闲态工作集修剪。AppShell 在 show/hide 时同步 windowVisible。
 final memoryTrimProvider = Provider<MemoryTrimService>((ref) {
-  final service = MemoryTrimService();
+  final service = MemoryTrimService(
+    isTrackingActive: () => ref.read(trackingEngineProvider).current.isActive,
+  );
   ref.onDispose(service.dispose);
   service.start();
   return service;
@@ -242,3 +246,21 @@ final settingsProvider =
         ref.watch(trackingEngineProvider),
       ),
     );
+
+// ── Bangumi 自动富化 ──────────────────────────────────────────
+/// 新增游戏后异步拉取评分与封面：只在候选唯一/标题精确时写回，
+/// 网络失败静默跳过；用 Set 幂等，避免每次库变更重复联网。
+final bangumiEnrichmentProvider = Provider<BangumiEnrichmentCoordinator>((ref) {
+  final coordinator = BangumiEnrichmentCoordinator(
+    games: ref.watch(gameRepoProvider),
+    cache: BackgroundCacheService(),
+    search: BangumiImageSearchService(),
+  );
+  String token = ref.read(settingsProvider).bangumiToken;
+  ref.listen(settingsProvider, (_, next) => token = next.bangumiToken);
+  ref.listen(gameListProvider, (_, next) {
+    coordinator.onGames(next.value ?? const <Game>[], token);
+  }, fireImmediately: true);
+  ref.onDispose(coordinator.dispose);
+  return coordinator;
+});

@@ -46,6 +46,8 @@ EVENT_SYSTEM_FOREGROUND
 
 入口实现：`lib/features/tracking/watcher/foreground_watcher.dart`。最小 FFI surface：`lib/features/tracking/watcher/win32_bindings.dart`。
 
+当精确路径未命中且前台进程镜像位于临时目录时（Enigma Virtual Box 等单文件壳会把实际窗口宿主放到 `%TEMP%\evbXXXX.tmp`），watcher 额外通过 `NtQueryInformationProcess(ProcessCommandLineInformation)` 采集前台进程命令行；`TrackingEngine` 再用“exe 核心名 + 版本/补丁后缀容错匹配 + 唯一标题兜底”（`game_attributor.dart`）保守归因，任何歧义都不猜测，宁可漏报也不误报。
+
 `WINEVENT_OUTOFCONTEXT` 令系统将事件投递到 watcher 线程的消息队列。该线程使用 `MsgWaitForMultipleObjectsEx` 等待消息；空闲时不做 Dart `Timer` busy loop，因此不会因轮询消耗 CPU。
 
 ### 2.2 心跳兜底

@@ -35,7 +35,9 @@ class ActiveRecordFrame extends ConsumerStatefulWidget {
 
 class _ActiveRecordFrameState extends ConsumerState<ActiveRecordFrame> {
   static const _cycleMs = 2800;
-  static const _tickMs = 33; // ~30fps
+  // 15fps 已足够表现慢速移动光点；相比 30fps 可把动画 CPU 削减一半，
+  // 且仅当前台记录卡片处于 live 时才运行（grace/隐藏时计时器完全停止）。
+  static const _tickMs = 66;
 
   Timer? _timer;
   double _progress = 0;

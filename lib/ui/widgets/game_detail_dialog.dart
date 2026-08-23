@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/path_normalizer.dart';
 import '../../features/background/background_service.dart';
 import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
@@ -37,6 +38,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
   double _requestedBlurAmount = 0;
   bool _preparingBlur = false;
   bool _backgroundBusy = false;
+  late String _exePath;
+  late String _exeDirPath;
   late final Stream<List<PlaySession>> _sessionsStream;
 
   final _backgroundCache = BackgroundCacheService();
@@ -54,6 +57,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     _detailBackgroundPath = widget.game.detailBackgroundPath;
     _blurAmount = widget.game.backgroundBlurAmount.clamp(0.0, 1.0);
     _requestedBlurAmount = _blurAmount;
+    _exePath = widget.game.exePath;
+    _exeDirPath = widget.game.dirPath;
     _sessionsStream = ref
         .read(sessionRepoProvider)
         .watchForGame(widget.game.id);
@@ -323,6 +328,8 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       widget.game.id,
       GamesCompanion(
         title: Value(_titleCtrl.text.trim()),
+        exePath: Value(normalizeExePath(_exePath)),
+        dirPath: Value(_exeDirPath),
         launchArgs: Value(_argsCtrl.text.trim()),
         useLocaleEmulator: Value(_useLe),
         leProfile: Value(_profileCtrl.text.trim()),
@@ -332,6 +339,108 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       ),
     );
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _pickLaunchExe() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['exe'],
+      dialogTitle: '选择启动程序 (exe)',
+    );
+    final selectedPath = result?.files.single.path;
+    if (selectedPath == null || selectedPath.isEmpty || !mounted) return;
+
+    String real = selectedPath;
+    try {
+      real = await File(selectedPath).resolveSymbolicLinks();
+    } catch (_) {}
+    final normalized = normalizeExePath(real);
+    final existing = await ref.read(gameRepoProvider).findByExePath(normalized);
+    if (!mounted) return;
+    if (existing != null && existing.id != widget.game.id) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该 exe 已被其他游戏占用，不能切换')));
+      return;
+    }
+    setState(() {
+      _exePath = real;
+      _exeDirPath = File(real).parent.path;
+    });
+  }
+
+  Widget _metadataChips() {
+    final score = widget.game.bangumiScore;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        Chip(
+          avatar: const Icon(Icons.timer_outlined, size: 15),
+          label: Text(
+            '总时长 ${formatPlayDuration(widget.game.totalPlaySeconds)}',
+          ),
+          visualDensity: VisualDensity.compact,
+        ),
+        Chip(
+          avatar: const Icon(Icons.rocket_launch_outlined, size: 15),
+          label: Text('启动 ${widget.game.launchCount} 次'),
+          visualDensity: VisualDensity.compact,
+        ),
+        if (score != null)
+          Chip(
+            avatar: const Icon(Icons.star_rate_rounded, size: 15),
+            label: Text('Bangumi ${score.toStringAsFixed(1)}'),
+            visualDensity: VisualDensity.compact,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          ),
+      ],
+    );
+  }
+
+  Widget _exeSection() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHover,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '启动程序 exe',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  displayPath(_exePath),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonal(
+            onPressed: _pickLaunchExe,
+            child: const Text('更换'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _backgroundSection() {
@@ -471,279 +580,279 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                     ),
                   Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            GameIcon(
-                              gameId: widget.game.id,
-                              size: 44,
-                              radius: 8,
-                              iconSize: 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.game.title,
-                                    style: const TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '总时长：${formatPlayDuration(widget.game.totalPlaySeconds)}',
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _titleCtrl,
-                          decoration: const InputDecoration(labelText: '游戏名称'),
-                        ),
-                        const SizedBox(height: 10),
-                        ref
-                            .watch(folderListProvider)
-                            .when(
-                              data: (folders) => DropdownButtonFormField<int?>(
-                                initialValue: _folderId,
-                                decoration: const InputDecoration(
-                                  labelText: '所属文件夹',
-                                ),
-                                items: [
-                                  const DropdownMenuItem<int?>(
-                                    value: null,
-                                    child: Text('未分类 (无文件夹)'),
-                                  ),
-                                  ...folders.map(
-                                    (f) => DropdownMenuItem<int?>(
-                                      value: f.id,
-                                      child: Text(f.name),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: (val) =>
-                                    setState(() => _folderId = val),
-                              ),
-                              loading: () => const SizedBox.shrink(),
-                              error: (_, _) => const SizedBox.shrink(),
-                            ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _argsCtrl,
-                          decoration: const InputDecoration(
-                            labelText: '附加启动参数',
-                            hintText: '-windowed -novsync',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _useLe,
-                              activeColor: Theme.of(
-                                context,
-                              ).colorScheme.secondary,
-                              onChanged: (v) =>
-                                  setState(() => _useLe = v ?? false),
-                            ),
-                            const Text(
-                              '使用 Locale Emulator 转区启动',
-                              style: TextStyle(color: AppColors.textPrimary),
-                            ),
-                          ],
-                        ),
-                        if (_useLe)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4, bottom: 8),
-                            child: TextField(
-                              controller: _profileCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'LE Profile 名 / GUID（留空使用全局默认）',
-                                hintText: 'Japan',
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 8),
-                        _backgroundSection(),
-                        if (_backgroundPath != null) ...[
-                          const SizedBox(height: 4),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Row(
                             children: [
-                              const Text(
-                                '背景模糊',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11,
-                                ),
+                              GameIcon(
+                                gameId: widget.game.id,
+                                size: 44,
+                                radius: 8,
+                                iconSize: 24,
                               ),
+                              const SizedBox(width: 12),
                               Expanded(
-                                child: Slider(
-                                  value: _blurAmount,
-                                  onChanged: _preparingBlur
-                                      ? null
-                                      : (value) =>
-                                            setState(() => _blurAmount = value),
-                                  onChangeEnd: _preparingBlur
-                                      ? null
-                                      : (value) {
-                                          _requestedBlurAmount = value;
-                                          unawaited(_commitBlurAmount(value));
-                                        },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.game.title,
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _metadataChips(),
+                                  ],
                                 ),
                               ),
-                              SizedBox(
-                                width: 34,
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _titleCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '游戏名称',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ref
+                              .watch(folderListProvider)
+                              .when(
+                                data: (folders) =>
+                                    DropdownButtonFormField<int?>(
+                                      initialValue: _folderId,
+                                      decoration: const InputDecoration(
+                                        labelText: '所属文件夹',
+                                      ),
+                                      items: [
+                                        const DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text('未分类 (无文件夹)'),
+                                        ),
+                                        ...folders.map(
+                                          (f) => DropdownMenuItem<int?>(
+                                            value: f.id,
+                                            child: Text(f.name),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (val) =>
+                                          setState(() => _folderId = val),
+                                    ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (_, _) => const SizedBox.shrink(),
+                              ),
+                          const SizedBox(height: 10),
+                          _exeSection(),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _argsCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '附加启动参数',
+                              hintText: '-windowed -novsync',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _useLe,
+                                activeColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondary,
+                                onChanged: (v) =>
+                                    setState(() => _useLe = v ?? false),
+                              ),
+                              const Text(
+                                '使用 Locale Emulator 转区启动',
+                                style: TextStyle(color: AppColors.textPrimary),
+                              ),
+                            ],
+                          ),
+                          if (_useLe)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 8),
+                              child: TextField(
+                                controller: _profileCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'LE Profile 名 / GUID（留空使用全局默认）',
+                                  hintText: 'Japan',
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+                          _backgroundSection(),
+                          if (_backgroundPath != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Text(
+                                  '背景模糊',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Slider(
+                                    value: _blurAmount,
+                                    onChanged: _preparingBlur
+                                        ? null
+                                        : (value) => setState(
+                                            () => _blurAmount = value,
+                                          ),
+                                    onChangeEnd: _preparingBlur
+                                        ? null
+                                        : (value) {
+                                            _requestedBlurAmount = value;
+                                            unawaited(_commitBlurAmount(value));
+                                          },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 34,
+                                  child: Text(
+                                    '${(_blurAmount * 100).round()}%',
+                                    textAlign: TextAlign.end,
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_preparingBlur)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 52),
                                 child: Text(
-                                  '${(_blurAmount * 100).round()}%',
-                                  textAlign: TextAlign.end,
-                                  style: const TextStyle(
+                                  '正在准备模糊背景…',
+                                  style: TextStyle(
                                     color: AppColors.textMuted,
                                     fontSize: 10,
                                   ),
                                 ),
                               ),
-                            ],
+                          ],
+                          const SizedBox(height: 6),
+                          const Text(
+                            '游玩历史记录',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          if (_preparingBlur)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 52),
-                              child: Text(
-                                '正在准备模糊背景…',
-                                style: TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 10,
-                                ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            height: 200,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceHover,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.border),
                               ),
-                            ),
-                        ],
-                        const SizedBox(height: 6),
-                        const Text(
-                          '游玩历史记录',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceHover,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: StreamBuilder<List<PlaySession>>(
-                              stream: _sessionsStream,
-                              builder: (context, snapshot) {
-                                final list = mergeSessions(
-                                  snapshot.data ?? const [],
-                                );
-                                if (list.isEmpty) {
-                                  return const Center(
-                                    child: Text(
-                                      '暂无游玩记录',
-                                      style: TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
+                              child: StreamBuilder<List<PlaySession>>(
+                                stream: _sessionsStream,
+                                builder: (context, snapshot) {
+                                  final list = mergeSessions(
+                                    snapshot.data ?? const [],
                                   );
-                                }
-                                return ListView.separated(
-                                  itemCount: list.length,
-                                  separatorBuilder: (_, _) => const Divider(
-                                    height: 1,
-                                    color: AppColors.border,
-                                  ),
-                                  itemBuilder: (_, i) {
-                                    final s = list[i];
-                                    final dateStr =
-                                        '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')} ${s.startedAt.hour.toString().padLeft(2, '0')}:${s.startedAt.minute.toString().padLeft(2, '0')}';
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Text(
-                                            dateStr,
-                                            style: const TextStyle(
-                                              color: AppColors.textSecondary,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            formatPlayDuration(
-                                              s.durationSeconds,
-                                            ),
-                                            style: TextStyle(
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
+                                  if (list.isEmpty) {
+                                    return const Center(
+                                      child: Text(
+                                        '暂无游玩记录',
+                                        style: TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     );
-                                  },
-                                );
-                              },
+                                  }
+                                  return ListView.separated(
+                                    itemCount: list.length,
+                                    separatorBuilder: (_, _) => const Divider(
+                                      height: 1,
+                                      color: AppColors.border,
+                                    ),
+                                    itemBuilder: (_, i) {
+                                      final s = list[i];
+                                      final dateStr =
+                                          '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')} ${s.startedAt.hour.toString().padLeft(2, '0')}:${s.startedAt.minute.toString().padLeft(2, '0')}';
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              dateStr,
+                                              style: const TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              formatPlayDuration(
+                                                s.durationSeconds,
+                                              ),
+                                              style: TextStyle(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text(
-                                '取消',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  '取消',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary,
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
+                                ),
+                                onPressed: _save,
+                                child: const Text(
+                                  '保存修改',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
-                              onPressed: _save,
-                              child: const Text(
-                                '保存修改',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

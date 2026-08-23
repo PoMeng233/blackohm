@@ -13,6 +13,7 @@ library;
 import 'dart:io';
 
 import '../../core/database/app_database.dart';
+import '../../data/game_repository.dart';
 import '../../providers.dart' show AppSettingsState;
 
 class LaunchService {
@@ -54,11 +55,18 @@ class LaunchService {
     }
   }
 
-  Future<bool> launch(Game game, AppSettingsState s) {
-    if (game.useLocaleEmulator) {
-      return launchViaLocaleEmulator(game, s);
+  Future<bool> launch(
+    Game game,
+    AppSettingsState s, {
+    GameRepository? games,
+  }) async {
+    final ok = game.useLocaleEmulator
+        ? await launchViaLocaleEmulator(game, s)
+        : await launchDirect(game);
+    if (ok && games != null) {
+      await games.incrementLaunchCount(game.id);
     }
-    return launchDirect(game);
+    return ok;
   }
 
   /// 在资源管理器中打开游戏目录，并选中当前运行文件。
