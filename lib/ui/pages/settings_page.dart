@@ -26,6 +26,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _leArgsCtrl;
   late final TextEditingController _leProfileCtrl;
   late final TextEditingController _bangumiTokenCtrl;
+  bool _testingToken = false;
 
   @override
   void initState() {
@@ -58,6 +59,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
     if (_bangumiTokenCtrl.text != s.bangumiToken) {
       _bangumiTokenCtrl.text = s.bangumiToken;
+    }
+  }
+
+  Future<void> _testBangumiToken() async {
+    final token = _bangumiTokenCtrl.text.trim();
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先粘贴 Bangumi API Token')),
+      );
+      return;
+    }
+    setState(() => _testingToken = true);
+    // 用一条已知需 R18 权限的条目验证：能取到详情说明 Token 有效且有权限。
+    final result = await BangumiImageSearchService().fetchSubject(
+      subjectId: 280839,
+      token: token,
+    );
+    if (!mounted) return;
+    setState(() => _testingToken = false);
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Token 无效或无 R18 权限（示例条目 280839 拉取失败）'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Token 有效：${result.title}')),
+      );
     }
   }
 
@@ -206,6 +236,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Uri.parse('https://next.bgm.tv/demo/access-token'),
                         mode: LaunchMode.externalApplication,
                       ),
+                    ),
+                    TextButton.icon(
+                      icon: _testingToken
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.verified_rounded, size: 17),
+                      label: const Text('测试 Token'),
+                      onPressed: _testingToken ? null : _testBangumiToken,
                     ),
                   ],
                 ),
