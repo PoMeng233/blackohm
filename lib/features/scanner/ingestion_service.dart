@@ -219,21 +219,44 @@ class IngestionService {
   }
 
   String _pickTitle(EnrichedCandidate c, String fallback) {
+    // 默认优先使用“目录名”，因为它通常就是游戏原标题；
+    // 只有目录名是引擎/样板/通用名（如 Game、acmp 等无意义词）才逐级回退。
+    final folder = fallback.trim();
+    if (_isMeaningfulTitle(folder)) return folder;
+
     // KiriKiri 等引擎的 FileDescription 是内核自述（"TVP(KIRIKIRI) 2 core…"），
-    // 不能当游戏名；逐级回退：描述 → 产品名 → exe 文件名 → 目录名。
+    // 不能当游戏名；逐级回退：描述 → 产品名 → exe 文件名。
     final d = c.description?.trim() ?? '';
-    if (!isBoilerplateTitle(d)) return d;
+    if (_isMeaningfulTitle(d)) return d;
     final p = c.productName?.trim() ?? '';
-    if (!isBoilerplateTitle(p)) return p;
+    if (_isMeaningfulTitle(p)) return p;
 
     final fileName = c.path.split(Platform.pathSeparator).last;
     final lower = fileName.toLowerCase();
     final stem = lower.endsWith('.exe')
         ? fileName.substring(0, fileName.length - 4)
         : fileName;
-    if (!isBoilerplateTitle(stem)) return stem;
+    if (_isMeaningfulTitle(stem)) return stem;
 
-    return fallback.isEmpty ? fileName : fallback;
+    return folder.isEmpty ? fileName : folder;
+  }
+
+  /// 判断是否为可作游戏名的标题：非空、非引擎/样板、非常见通用词。
+  bool _isMeaningfulTitle(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return false;
+    if (isBoilerplateTitle(t)) return false;
+    final lower = t.toLowerCase();
+    if (lower.length <= 2) return false;
+    const generic = {
+      'game', 'games', 'galgame', 'galgames', 'vn', 'visualnovel',
+      'visual-novel', 'visual_novel', 'newfolder', 'new folder',
+      'untitled', 'launcher', 'launch', 'start', 'main', 'app', 'run',
+      'boot', 'loader', 'setup', 'install', 'installer', 'uninstall',
+      'downloads', 'download', 'desktop', 'documents', 'folder', 'bf',
+      'acmp', 'exe', 'executable', 'application', 'program',
+    };
+    return !generic.contains(lower);
   }
 
   /// 批量 PE 解析：文件 IO + 资源解析 + PNG 编码全部在一次性 isolate。

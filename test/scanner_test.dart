@@ -80,6 +80,26 @@ void main() {
     });
   });
 
+  test('目录名为游戏标题时默认用目录名而非 acmp.exe 这类 exe 名', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final repo = GameRepository(db);
+    final service = IngestionService(repo);
+    final root = await Directory.systemTemp.createTemp('blackohm_title_test_');
+    final gameDir = Directory('${root.path}${Platform.pathSeparator}鍵を隠したカゴのトリ');
+    await gameDir.create();
+    try {
+      final exe = File('${gameDir.path}${Platform.pathSeparator}acmp.exe');
+      await exe.writeAsBytes([0x4D, 0x5A]);
+      final report = await service.ingestDroppedPaths([exe.path]);
+      expect(report.added, ['鍵を隠したカゴのトリ']);
+      final games = await repo.watchAll().first;
+      expect(games.single.title, '鍵を隠したカゴのトリ');
+    } finally {
+      await db.close();
+      await root.delete(recursive: true);
+    }
+  });
+
   test('明显是引擎名字的标题会被识别为样板，回退到文件夹名', () {
     expect(isBoilerplateTitle('BGI - Main window'), isTrue);
     expect(isBoilerplateTitle('Ethornell'), isTrue);
