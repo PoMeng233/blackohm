@@ -147,6 +147,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       if (!mounted) return;
       final message = report.added.isNotEmpty
           ? '成功入库 ${report.added.length} 款游戏'
+          : report.duplicatePaths.isNotEmpty
+          ? '所选程序已在游戏库中'
           : '未找到有效的游戏运行文件';
       ScaffoldMessenger.of(
         context,

@@ -83,7 +83,6 @@ List<ExeCandidate> scanForGameExes(String rootDir, {int? maxDepth}) {
           queue.add((e, level + 1));
         }
       } else if (e is File && name.toLowerCase().endsWith('.exe')) {
-        if (kExeBlacklist.hasMatch(name)) continue;
         try {
           final st = e.statSync();
           candidates.add(

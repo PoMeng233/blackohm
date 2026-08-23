@@ -24,15 +24,6 @@ const int kScanMaxDepth = 3;
 /// 目录内文件数硬上限（单层），超过则跳过该目录（防误拖系统目录）。
 const int kScanMaxEntriesPerDir = 20000;
 
-/// 常见非游戏可执行文件黑名单（不区分大小写）。
-/// 覆盖卸载器、运行库安装器、崩溃报告器、配置/安装工具等。
-final RegExp kExeBlacklist = RegExp(
-  r'^(unins.*|dxwebsetup|dxsetup|vcredist.*|vc_redist.*|crashreport.*|'
-  r'config|setting(s)?|setup|install.*|.*installer|uninst.*|'
-  r'dotnetfx.*|ndp.*|oalinstall|directx.*|langupdate.*|update.*)\.exe$',
-  caseSensitive: false,
-);
-
 /// Locale Emulator 默认启动参数模板。
 /// 占位符：`{exe}` 目标程序绝对路径，`{profile}` LE Profile 名/GUID，`{args}` 附加参数。
 /// LEProc 常见形式：
