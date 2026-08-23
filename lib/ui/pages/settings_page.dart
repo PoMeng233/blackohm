@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
+import '../../data/settings_repository.dart';
 import '../../features/background/background_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -63,30 +64,56 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _testBangumiToken() async {
-    final token = _bangumiTokenCtrl.text.trim();
+    // 优先使用“设置状态/持久化”里的 token（与真正请求走同一条路径），
+    // 避免输入框与已保存值不一致导致的“看似填了其实没保存”问题。
+    final saved = ref.read(settingsProvider).bangumiToken.trim();
+    final controllerText = _bangumiTokenCtrl.text.trim();
+    final token = controllerText.isNotEmpty ? controllerText : saved;
     if (token.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请先粘贴 Bangumi API Token')),
       );
       return;
     }
+
+    // 自检持久化是否与输入框一致（排查缓存/未保存问题）。
+    final persisted = await ref
+        .read(settingsRepoProvider)
+        .get(SettingsKeys.bangumiToken);
+    if (!mounted) return;
+    final storageMismatch =
+        persisted.trim().isNotEmpty &&
+        persisted.trim() != token;
+
     setState(() => _testingToken = true);
-    // 用一条已知需 R18 权限的条目验证：能取到详情说明 Token 有效且有权限。
-    final result = await BangumiImageSearchService().fetchSubject(
+    final result = await BangumiImageSearchService().fetchSubjectDetailed(
       subjectId: 280839,
       token: token,
     );
     if (!mounted) return;
     setState(() => _testingToken = false);
-    if (result == null) {
+
+    final status = result.statusCode;
+    if (result.candidate != null) {
+      final extra = storageMismatch
+          ? '（注意：输入框与已保存值不一致，可能尚未保存成功）'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Token 无效或无 R18 权限（示例条目 280839 拉取失败）'),
-        ),
+        SnackBar(content: Text('Token 有效：${result.candidate!.title}$extra')),
+      );
+    } else if (status == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网络异常/超时，无法连接 Bangumi API')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Token 有效：${result.title}')),
+        SnackBar(
+          content: Text(
+            storageMismatch
+                ? 'Token 无效或无 R18 权限（HTTP $status），且输入框与已保存值不一致'
+                : 'Token 无效或无 R18 权限（HTTP $status）',
+          ),
+        ),
       );
     }
   }

@@ -90,7 +90,18 @@ class BangumiImageSearchService {
     required int subjectId,
     required String token,
   }) async {
-    if (subjectId <= 0 || token.trim().isEmpty) return null;
+    return (await fetchSubjectDetailed(subjectId: subjectId, token: token))
+        .candidate;
+  }
+
+  /// 返回 HTTP 状态码与候选结果的诊断封装，便于设置页自检时给出明确提示。
+  Future<({int? statusCode, BangumiImageCandidate? candidate})> fetchSubjectDetailed({
+    required int subjectId,
+    required String token,
+  }) async {
+    if (subjectId <= 0 || token.trim().isEmpty) {
+      return (statusCode: null, candidate: null);
+    }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final request = await client.getUrl(
@@ -107,12 +118,15 @@ class BangumiImageSearchService {
         const Duration(seconds: 12),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
+        return (statusCode: response.statusCode, candidate: null);
       }
       final body = await response.transform(utf8.decoder).join();
-      return parseBangumiGameSubjectJson(body);
-    } catch (_) {
-      return null;
+      return (
+        statusCode: response.statusCode,
+        candidate: parseBangumiGameSubjectJson(body),
+      );
+    } catch (e) {
+      return (statusCode: null, candidate: null);
     } finally {
       client.close(force: true);
     }

@@ -224,8 +224,9 @@ class SettingsController extends StateNotifier<AppSettingsState> {
   }
 
   Future<void> setBangumiToken(String v) async {
-    state = state.copyWith(bangumiToken: v);
-    await _repo.set(SettingsKeys.bangumiToken, v.trim());
+    final trimmed = v.trim();
+    state = state.copyWith(bangumiToken: trimmed);
+    await _repo.set(SettingsKeys.bangumiToken, trimmed);
   }
 
   Future<void> setShellBackgroundPath(String v) async {
