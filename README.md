@@ -183,3 +183,9 @@ python tool/generate_app_icons.py
 ## License
 
 本项目以 [MIT License](LICENSE) 发布。
+
+第三方素材与依赖授权：内嵌的 MiSans 字体、全部 Dart 依赖及外部服务的
+授权说明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+参与贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)；安全漏洞请通过
+[SECURITY.md](SECURITY.md) 描述的渠道私下报告。
