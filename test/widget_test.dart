@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:blackohm/core/path_normalizer.dart';
 import 'package:blackohm/features/scanner/pe_info.dart';
 import 'package:blackohm/features/scanner/png_encoder.dart';
 import 'package:blackohm/ui/theme.dart';
+import 'package:flutter/material.dart';
+import 'package:blackohm/ui/widgets/game_detail_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -38,6 +41,41 @@ void main() {
         0x0A,
       ]);
       expect(png.length, greaterThan(40));
+    });
+  });
+
+  group('主题配色方案', () {
+    test('包含五个可选方案且每个方案都有 Material 3 seed', () {
+      expect(ThemePalette.values, hasLength(5));
+      expect(
+        ThemePalette.values.map(paletteLabel),
+        containsAll(<String>{'樱桃红'}),
+      );
+      for (final palette in ThemePalette.values) {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: paletteSeed(palette),
+          brightness: Brightness.dark,
+        );
+        expect(scheme.primary, isNotNull);
+        expect(scheme.primaryContainer, isNotNull);
+      }
+    });
+  });
+
+  group('启动程序选择目录', () {
+    test('当前 exe 存在时返回其游戏文件夹', () async {
+      final root = await Directory.systemTemp.createTemp('blackohm_picker_');
+      try {
+        final exe = File('${root.path}${Platform.pathSeparator}game.exe');
+        await exe.writeAsBytes(const <int>[]);
+        expect(initialDirectoryForExe(exe.path), root.path);
+      } finally {
+        await root.delete(recursive: true);
+      }
+    });
+
+    test('无效 exe 路径返回 null', () {
+      expect(initialDirectoryForExe(r'Z:\missing\game.exe'), isNull);
     });
   });
 

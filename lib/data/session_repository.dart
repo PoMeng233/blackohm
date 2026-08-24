@@ -10,6 +10,37 @@ class SessionRepository {
 
   final AppDatabase _db;
 
+  /// 收口上次进程异常退出留下的开放 Session。
+  /// 整个恢复在单一事务内完成；记录一旦写入 endedAt，后续启动不会重复补账。
+  Future<void> recoverOpenSessions() {
+    return _db.transaction(() async {
+      final open = await (_db.select(
+        _db.playSessions,
+      )..where((s) => s.endedAt.isNull())).get();
+      for (final session in open) {
+        final gameId = session.gameId;
+        final seconds = session.durationSeconds;
+        if (gameId == null || seconds <= 0) {
+          await (_db.delete(
+            _db.playSessions,
+          )..where((s) => s.id.equals(session.id))).go();
+          continue;
+        }
+        final endedAt = session.startedAt.add(Duration(seconds: seconds));
+        await (_db.update(_db.playSessions)
+              ..where((s) => s.id.equals(session.id)))
+            .write(PlaySessionsCompanion(endedAt: Value(endedAt)));
+        await (_db.update(_db.games)..where((g) => g.id.equals(gameId))).write(
+          GamesCompanion.custom(
+            totalPlaySeconds:
+                _db.games.totalPlaySeconds + Variable<int>(seconds),
+            lastPlayedAt: Variable<DateTime>(endedAt),
+          ),
+        );
+      }
+    });
+  }
+
   /// 开启一条新会话并返回其 id。
   Future<int> start(int gameId, DateTime startedAt) {
     return _db

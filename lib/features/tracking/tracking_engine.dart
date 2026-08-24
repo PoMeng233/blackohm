@@ -88,6 +88,7 @@ class TrackingEngine {
   int _shutdownEvent = 0;
   Timer? _tick;
   DateTime _lastFlush = DateTime.now();
+  bool _recoveredOpenSessions = false;
 
   final StreamController<TrackingPublicState> _states =
       StreamController<TrackingPublicState>.broadcast();
@@ -115,6 +116,10 @@ class TrackingEngine {
   /// 启动引擎：spawn watcher isolate + 1s 精算 tick。
   Future<void> start() async {
     if (_port != null) return;
+    if (!_recoveredOpenSessions) {
+      await _sessions.recoverOpenSessions();
+      _recoveredOpenSessions = true;
+    }
     _port = ReceivePort();
     _watcherIsolate = await watcher_lib.spawnForegroundWatcher(_port!.sendPort);
     _port!.listen(_onWatcherEvent, onError: (_) => _restartWatcher());

@@ -57,4 +57,42 @@ void main() {
     ];
     expect(mergeSessions(sessions), hasLength(2));
   });
+
+  test('开放 Session 不会按 startedAt 到现在的墙上时间膨胀', () {
+    final start = DateTime(2026, 8, 24, 3, 24);
+    final session = PlaySession(
+      id: 1,
+      gameId: 102,
+      startedAt: start,
+      endedAt: null,
+      durationSeconds: 39,
+    );
+
+    final daily = distributeSessionDurationByDay(
+      session,
+      rangeStart: DateTime(2026, 8, 24),
+      rangeEnd: DateTime(2026, 8, 25),
+    );
+
+    expect(daily.values.fold(0, (sum, seconds) => sum + seconds), 39);
+  });
+
+  test('Session 的 grace 墙上跨度不会替代真实累计秒数', () {
+    final start = DateTime(2026, 8, 24, 2, 50, 15);
+    final session = PlaySession(
+      id: 2,
+      gameId: 102,
+      startedAt: start,
+      endedAt: DateTime(2026, 8, 24, 3, 9, 32),
+      durationSeconds: 43,
+    );
+
+    final daily = distributeSessionDurationByDay(
+      session,
+      rangeStart: DateTime(2026, 8, 24),
+      rangeEnd: DateTime(2026, 8, 25),
+    );
+
+    expect(daily.values.fold(0, (sum, seconds) => sum + seconds), 43);
+  });
 }

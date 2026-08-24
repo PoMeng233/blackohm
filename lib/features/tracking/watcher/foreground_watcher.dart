@@ -16,6 +16,14 @@
 /// 每次前台变化都在本 isolate 内完成
 /// OpenProcess → QueryFullProcessImageNameW → GetLongPathNameW → 标准化，
 /// 只把轻量快照发回主 isolate，保证 UI 线程零阻塞。
+///
+/// 性能设计（稳态 CPU ≈ 0%）：
+///  * 心跳对“同窗口且可见性未变”走快速门控，仅做 IsWindowVisible/IsIconic
+///    两次廉价调用，跳过全部跨进程查询——同窗口存活期内五项去重键
+///   （hwnd/pid/imagePath/commandLine/visible）不可能变化，不会漏发快照；
+///  * pid → (imagePath, commandLine) 结果缓存：窗口反复切换时免去重复的
+///    OpenProcess + 镜像路径解析；缓存随快照失效（锁屏/解锁/睡眠/唤醒）
+///    一并清空，杜绝进程退出后 PID 复用的脏读。
 library;
 
 import 'dart:ffi';
@@ -32,6 +40,28 @@ class _WatcherConfig {
   final SendPort replyTo;
 }
 
+/// pid → 进程镜像解析结果缓存条目（commandLine 仅临时目录壳进程非空）。
+class _PathEntry {
+  const _PathEntry(this.imagePath, this.commandLine);
+  final String? imagePath;
+  final String? commandLine;
+}
+
+/// 路径缓存上限：超过即整体清空（简单防膨胀；正常桌面会话远达不到）。
+const int kPathCacheLimit = 32;
+
+/// 心跳/事件共用的快速门控（纯函数，便于单测）：
+/// 同一窗口且可见性未变时，快照五项去重键均不可能变化
+/// （镜像路径在进程创建时固定、pid 隶属于 hwnd），可跳过完整解析。
+bool shouldSkipFullParse({
+  required int hwnd,
+  required bool visible,
+  required int lastHwnd,
+  required bool lastVisible,
+}) {
+  return hwnd != 0 && hwnd == lastHwnd && visible == lastVisible;
+}
+
 /// 由主 isolate 调用：spawn watcher 并返回其 isolate 句柄。
 Future<Isolate> spawnForegroundWatcher(SendPort replyTo) {
   return Isolate.spawn(
@@ -45,7 +75,7 @@ Future<Isolate> spawnForegroundWatcher(SendPort replyTo) {
 void signalShutdown(int eventHandle) => w.setEvent(eventHandle);
 
 /// 判断进程镜像路径是否位于临时目录（EVB 等单文件壳的影子 stub 特征）。
-bool _isTempPath(String imagePath) {
+bool isTempImagePath(String imagePath) {
   final p = imagePath.toLowerCase();
   return p.contains(r'\appdata\local\temp\') ||
       p.startsWith(r'c:\windows\temp\') ||
@@ -63,24 +93,23 @@ void _watcherMain(_WatcherConfig config) {
   late final NativeCallable<w.WndProcNative> wndProcCb;
 
   var lastHwnd = -1;
-  var lastPid = -1;
-  String? lastPath;
-  String? lastCommandLine;
   var lastVisible = false;
   var locked = false;
   var suspended = false;
+  final pathCache = <int, _PathEntry>{};
 
   void invalidateSnapshot() {
     lastHwnd = -1;
-    lastPid = -1;
-    lastPath = null;
-    lastCommandLine = null;
     lastVisible = false;
+    // 进程可能在失效窗口期内退出（PID 复用风险）→ 缓存一并作废。
+    pathCache.clear();
   }
 
   void emitSnapshot(int hwnd) {
     if (hwnd == 0) {
+      if (lastHwnd == 0) return; // 空前台已上报：去重
       invalidateSnapshot();
+      lastHwnd = 0;
       reply.send(
         const ForegroundSnapshot(
           hwnd: 0,
@@ -93,36 +122,44 @@ void _watcherMain(_WatcherConfig config) {
       );
       return;
     }
+    // 廉价可见性检查先行：心跳稳态下同窗口同可见性，直接短路，
+    // 避免每秒重复执行 OpenProcess + 镜像路径解析。
+    final visible = w.isWindowVisible(hwnd) && !w.isIconic(hwnd);
+    if (shouldSkipFullParse(
+      hwnd: hwnd,
+      visible: visible,
+      lastHwnd: lastHwnd,
+      lastVisible: lastVisible,
+    )) {
+      return;
+    }
     final pid = w.pidForWindow(hwnd);
     String? imagePath;
     String? commandLine;
     if (pid != 0) {
-      final hProc = w.openProcessQuery(pid);
-      if (hProc != 0) {
-        final raw = w.queryProcessImagePath(hProc);
-        if (raw != null) {
-          imagePath = normalizeExePath(w.getLongPathName(raw));
-          // 仅对位于临时目录的进程采集命令行：这是 EVB 等单文件壳
-          // 把窗口宿主放到 %TEMP%\evbXXXX.tmp 的特征，用于补充归因。
-          if (_isTempPath(imagePath)) {
-            commandLine = w.queryProcessCommandLine(hProc);
+      final cached = pathCache[pid];
+      if (cached != null) {
+        imagePath = cached.imagePath;
+        commandLine = cached.commandLine;
+      } else {
+        final hProc = w.openProcessQuery(pid);
+        if (hProc != 0) {
+          final raw = w.queryProcessImagePath(hProc);
+          if (raw != null) {
+            imagePath = normalizeExePath(w.getLongPathName(raw));
+            // 仅对位于临时目录的进程采集命令行：这是 EVB 等单文件壳
+            // 把窗口宿主放到 %TEMP%\evbXXXX.tmp 的特征，用于补充归因。
+            if (isTempImagePath(imagePath)) {
+              commandLine = w.queryProcessCommandLine(hProc);
+            }
           }
+          w.closeHandle(hProc);
         }
-        w.closeHandle(hProc);
+        if (pathCache.length >= kPathCacheLimit) pathCache.clear();
+        pathCache[pid] = _PathEntry(imagePath, commandLine);
       }
     }
-    final visible = w.isWindowVisible(hwnd) && !w.isIconic(hwnd);
-    if (hwnd == lastHwnd &&
-        pid == lastPid &&
-        imagePath == lastPath &&
-        commandLine == lastCommandLine &&
-        visible == lastVisible) {
-      return;
-    }
     lastHwnd = hwnd;
-    lastPid = pid;
-    lastPath = imagePath;
-    lastCommandLine = commandLine;
     lastVisible = visible;
     reply.send(
       ForegroundSnapshot(

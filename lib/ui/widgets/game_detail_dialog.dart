@@ -18,6 +18,13 @@ import '../../providers.dart';
 import '../theme.dart';
 import 'game_icon.dart';
 
+/// 返回当前启动 exe 所在目录；路径无效时让文件选择器使用系统默认目录。
+String? initialDirectoryForExe(String exePath) {
+  if (exePath.trim().isEmpty) return null;
+  final parent = File(exePath).parent;
+  return parent.existsSync() ? parent.path : null;
+}
+
 class GameDetailDialog extends ConsumerStatefulWidget {
   const GameDetailDialog({required this.game, super.key});
 
@@ -366,6 +373,7 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['exe'],
+      initialDirectory: initialDirectoryForExe(_exePath),
       dialogTitle: '选择启动程序 (exe)',
     );
     final selectedPath = result?.files.single.path;

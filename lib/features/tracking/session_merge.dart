@@ -64,6 +64,49 @@ List<MergedPlaySession> mergeSessions(
   return merged;
 }
 
+/// 将真实累计秒数按 Session 的墙上时间跨度比例分配到自然日。
+/// [durationSeconds] 是唯一的总量来源；起止时间只决定归属，不增加时长。
+Map<DateTime, int> distributeSessionDurationByDay(
+  PlaySession session, {
+  required DateTime rangeStart,
+  required DateTime rangeEnd,
+}) {
+  final duration = session.durationSeconds;
+  if (duration <= 0 || !rangeEnd.isAfter(rangeStart)) return const {};
+
+  final startedAt = session.startedAt;
+  final fallbackEnd = startedAt.add(Duration(seconds: duration));
+  final endedAt = session.endedAt;
+  final effectiveEnd = endedAt != null && endedAt.isAfter(startedAt)
+      ? endedAt
+      : fallbackEnd;
+  final clippedStart = startedAt.isAfter(rangeStart) ? startedAt : rangeStart;
+  final clippedEnd = effectiveEnd.isBefore(rangeEnd) ? effectiveEnd : rangeEnd;
+  if (!clippedEnd.isAfter(clippedStart)) return const {};
+
+  final totalMicros = effectiveEnd.difference(startedAt).inMicroseconds;
+  if (totalMicros <= 0) return const {};
+  final result = <DateTime, int>{};
+  var cursor = clippedStart;
+  var allocatedThrough =
+      (duration * clippedStart.difference(startedAt).inMicroseconds) ~/
+      totalMicros;
+
+  while (cursor.isBefore(clippedEnd)) {
+    final day = DateTime(cursor.year, cursor.month, cursor.day);
+    final nextDay = day.add(const Duration(days: 1));
+    final chunkEnd = clippedEnd.isBefore(nextDay) ? clippedEnd : nextDay;
+    final cumulative =
+        (duration * chunkEnd.difference(startedAt).inMicroseconds) ~/
+        totalMicros;
+    final seconds = cumulative - allocatedThrough;
+    if (seconds > 0) result[day] = (result[day] ?? 0) + seconds;
+    allocatedThrough = cumulative;
+    cursor = chunkEnd;
+  }
+  return result;
+}
+
 DateTime _sessionEnd(PlaySession session) {
   final fallback = session.startedAt.add(
     Duration(seconds: session.durationSeconds),

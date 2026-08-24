@@ -3,13 +3,14 @@ library;
 
 import 'package:flutter/material.dart';
 
-enum ThemePalette { obsidian, ocean, amethyst, amber }
+enum ThemePalette { obsidian, ocean, amethyst, amber, cherry }
 
 Color paletteSeed(ThemePalette palette) => switch (palette) {
   ThemePalette.obsidian => const Color(0xFF00E5A3),
   ThemePalette.ocean => const Color(0xFF60A5FA),
   ThemePalette.amethyst => const Color(0xFFC084FC),
   ThemePalette.amber => const Color(0xFFF59E0B),
+  ThemePalette.cherry => const Color(0xFFFB7185),
 };
 
 String paletteLabel(ThemePalette palette) => switch (palette) {
@@ -17,6 +18,7 @@ String paletteLabel(ThemePalette palette) => switch (palette) {
   ThemePalette.ocean => '深海蓝',
   ThemePalette.amethyst => '紫晶',
   ThemePalette.amber => '琥珀',
+  ThemePalette.cherry => '樱桃红',
 };
 
 extension AppThemeColors on BuildContext {

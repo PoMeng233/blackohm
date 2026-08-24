@@ -2,13 +2,15 @@
 
 > Windows 专用、纯本地的视觉小说资产管理与**前台焦点游玩记录器**。
 
-BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `.exe` 拖入窗口即可扫描入库；当一个已入库游戏的主窗口真正位于前台、可见且未最小化时，才累计游玩时长。它不依赖由本程序启动的子进程句柄，因此经 Locale Emulator、外部启动器或直接双击运行的游戏都可被被动捕获。
+BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `.exe` 拖入窗口即可扫描入库（目前尚未实现多游戏入库）；当一个已入库游戏的主窗口真正位于前台、可见且未最小化时，才累计游玩时长。它不依赖由本程序启动的子进程句柄，因此经 Locale Emulator、外部启动器或直接双击运行的游戏都可被被动捕获。
+
+## 亮点
 
 ## 核心能力
 
 - **事件驱动的精准计时**：通过 `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` 捕获焦点切换；`GetForegroundWindow → PID → QueryFullProcessImageNameW` 获得真实镜像路径并与游戏库 O(1) 匹配。
-- **不会把挂机计入时长**：窗口失焦、切换到浏览器、最小化、锁屏或睡眠时停止累加；仅短于 3 秒的焦点切换会合并为同一连续 Session。
-- **低资源后台守护**：焦点 watcher 运行在独立 Isolate，空闲时阻塞于 `MsgWaitForMultipleObjectsEx` 内核等待；另有每秒一次的轻量心跳兜底。
+- **不会把挂机计入时长**：窗口失焦、切换到浏览器、最小化、锁屏或睡眠时停止累加；仅短于 3 秒的焦点切换会合并为同一连续 Session。未来可能添加防睡眠机制。
+- **低资源后台守护**：焦点 watcher 运行在独立 Isolate，空闲时阻塞于 `MsgWaitForMultipleObjectsEx` 内核等待；另有每秒一次的轻量心跳兜底——同窗口快速门控加镜像路径缓存，稳态 CPU 占用趋近 0%。
 - **拖拽扫描与多 Exe 决策**：目录扫描采用深度限制 BFS 与候选数量上限，不按 exe 文件名、PE 产品名或游戏引擎过滤；单候选自动入库，多候选完整展示并标记已入库项。
 - **PE 元信息提取**：纯 Dart 解析 PE 资源目录，尝试提取 `FileDescription`、`ProductName`、版本字段和首选图标；DIB 图标由内置 PNG 编码器写入 SQLite Blob。
 - **Locale Emulator 集成**：每款游戏可选择 LE 启动；LEProc 路径、Profile 与参数模板均可配置。计时按最终游戏窗口镜像路径匹配，不受代理进程影响。
@@ -22,7 +24,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 
 ```text
 flutter analyze                         # No issues found
-flutter test                            # 55 tests passed
+flutter test                            # 74 tests passed
 flutter build windows --release         # 成功生成 blackohm.exe
 ```
 
@@ -133,13 +135,6 @@ assets/
 docs/ARCHITECTURE.md                      # 数据流、性能和约束说明
 tool/generate_app_icons.py                # 从 icon_source.png 生成两个 ICO
 ```
-
-## 性能设计与真实性说明
-
-设计目标是让空闲 watcher 近似零 CPU：它绝大多数时间在 Windows 内核等待中休眠，文件扫描和 PE 解析也全部在一次性 Isolate 中执行。SQLite 使用后台连接和 WAL，活跃 Session 每 60 秒批量刷盘。
-
-**`CPU < 0.1%` 和 `常驻内存 < 60 MB` 应被视为发布验收目标，不是没有硬件/Flutter 引擎版本条件的绝对承诺。** 发布前请在目标硬件上使用任务管理器、Windows Performance Recorder 或 PerfView 测量 idle、最小化托盘、库页滚动和持续计时四种场景。详细取舍与调优方案见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
 ## 已知限制
 
 - 游戏主进程以管理员权限运行而 BlackOhm 未提权时，`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` 可能拒绝访问，导致无法取得镜像路径。此时请以相同权限级别启动 BlackOhm。
@@ -173,4 +168,4 @@ python tool/generate_app_icons.py
 
 ## License
 
-当前仓库未指定许可证；在公开分发前请添加适合项目的 `LICENSE` 文件。
+本项目以 [MIT License](LICENSE) 发布。

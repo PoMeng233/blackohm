@@ -45,6 +45,8 @@ app.*.map.json
 /android/app/release
 
 # ── BlackOhm 项目专属 ────────────────────────────────────────
+# OpenCode 本地计划/工作区文件
+.opencode/
 # Drift 生成绑定文件会提交到版本控制，确保克隆后可直接构建。
 # 运行期数据库产物
 *.db

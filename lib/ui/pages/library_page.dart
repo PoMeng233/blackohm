@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,50 @@ import '../widgets/game_icon.dart';
 enum LibraryViewMode { grid, list }
 
 enum LibrarySort { recent, title, totalTime, createdAt, favorite }
+
+/// 横排封面渐隐覆盖区的几何与渐变 stops（纯数据，便于单测）。
+class RowCoverFade {
+  const RowCoverFade({
+    required this.overlayLeft,
+    required this.overlayWidth,
+    required this.stops,
+  });
+
+  /// 渐变覆盖区左缘（相对行左边界）。
+  final double overlayLeft;
+
+  /// 渐变覆盖区宽度（略宽于渐变所需，冗余盖住图片右缘）。
+  final double overlayWidth;
+
+  /// 线性渐变 stops：最后一个 stop 精确落在图片右缘对应的进度上，
+  /// 保证位图边缘处达到 100% 不透明，消除硬切缝。
+  final List<double> stops;
+}
+
+/// 由行宽与图片宽度推导横排封面渐隐几何（纯函数）。
+///
+/// 覆盖区起点 = 图片右缘向内 fadeW；终点超出图片右缘 6% 行宽做冗余；
+/// stops 动态计算使全不透明点精确落在 [imageWidth] 处，
+/// 冗余段由 LinearGradient 的末段钳制自然保持终色。
+RowCoverFade computeRowCoverFade({
+  required double rowWidth,
+  required double imageWidth,
+}) {
+  final fadeW = (imageWidth * 0.24).clamp(18.0, 180.0).toDouble();
+  final overlayLeft = (imageWidth - fadeW).clamp(0.0, rowWidth).toDouble();
+  final overlayWidth =
+      (fadeW + rowWidth * 0.06).clamp(0.0, rowWidth - overlayLeft).toDouble();
+  // 图片右缘在覆盖区内对应的渐变进度；窄行可能把 overlayWidth clamp 到
+  // 小于 fadeW 甚至 0，此时钳回 1.0（零宽覆盖区不渲染，无除零风险）。
+  final edgeT = overlayWidth <= 0
+      ? 1.0
+      : (fadeW / overlayWidth).clamp(0.0, 1.0).toDouble();
+  return RowCoverFade(
+    overlayLeft: overlayLeft,
+    overlayWidth: overlayWidth,
+    stops: <double>[0.0, edgeT * 0.5, edgeT],
+  );
+}
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -880,38 +925,24 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 itemBuilder: (context, i) {
                   final g = filtered[i];
                   final isCardActive = activeGameId == g.id;
-                  final backgroundPath = g.backgroundPath;
-                  final backgroundFile =
-                      backgroundPath != null && backgroundPath.isNotEmpty
-                      ? File(backgroundPath)
-                      : null;
-                  final hasBackground =
-                      backgroundFile != null && backgroundFile.existsSync();
-                  final detailPath = g.detailBackgroundPath;
-                  final hasBlurBackground =
-                      g.backgroundBlurAmount > 0 &&
-                      detailPath != null &&
-                      File(detailPath).existsSync();
-
-                  // 游玩时长占比：最高占整行 3/4 (0.75) 面积
                   final ratio = maxPlaySeconds > 0
                       ? (g.totalPlaySeconds / maxPlaySeconds).clamp(0.0, 1.0)
                       : 0.0;
                   final widthFraction = ratio * 0.75;
-                  final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-                  final listCacheWidth = (800 * pixelRatio).round().clamp(
-                    1,
-                    1440,
-                  );
-                  final listCacheHeight = (96 * pixelRatio).round().clamp(
-                    1,
-                    240,
-                  );
-
+                  final backgroundPath = g.backgroundPath;
+                  final backgroundFile =
+                      backgroundPath == null || backgroundPath.isEmpty
+                      ? null
+                      : File(backgroundPath);
+                  final hasBackground =
+                      backgroundFile != null && backgroundFile.existsSync();
+                  // 渐隐目标色必须与行底色一致：活跃行为 surfaceActive，
+                  // 否则封面会溶入错误颜色形成发暗鬼影。
+                  final rowBg = isCardActive
+                      ? AppColors.surfaceActive
+                      : AppColors.surface;
                   final rowItem = Material(
-                    color: isCardActive
-                        ? AppColors.surfaceActive
-                        : AppColors.surface,
+                    color: rowBg,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: BorderSide(
@@ -932,59 +963,82 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ),
                       child: Stack(
                         children: [
-                          // 动态面积背景图：从左往右展示，根据游玩时长最多占 3/4，大羽化渐变 + 压暗遮罩保护文字
-                          if (hasBackground && widthFraction > 0.05)
+                          // 封面图按比例裁切填满时长条，仅按宽度约束解码以保持长宽比；
+                          // 图片上先叠一层均匀压暗降低亮度（保证前景文字可读），
+                          // 右缘用动态 stops 的渐变覆盖：全不透明点精确落在
+                          // 位图边缘，冗余段保持终色，彻底消除硬切缝。
+                          if (hasBackground && widthFraction > 0)
                             Positioned.fill(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: FractionallySizedBox(
-                                  widthFactor: widthFraction,
-                                  child: Stack(
-                                    fit: StackFit.expand,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final rowW = constraints.maxWidth;
+                                  final dpr = MediaQuery.devicePixelRatioOf(
+                                    context,
+                                  );
+                                  final imageW = widthFraction * rowW;
+                                  final fade = computeRowCoverFade(
+                                    rowWidth: rowW,
+                                    imageWidth: imageW,
+                                  );
+                                  final cacheWidth = (imageW * dpr)
+                                      .round()
+                                      .clamp(1, 960);
+                                  return Stack(
                                     children: [
-                                      Image.file(
-                                        backgroundFile,
-                                        fit: BoxFit.cover,
-                                        cacheWidth: listCacheWidth,
-                                        cacheHeight: listCacheHeight,
-                                        filterQuality: FilterQuality.low,
-                                        errorBuilder: (_, _, _) =>
-                                            const SizedBox.shrink(),
-                                      ),
-                                      if (hasBlurBackground)
-                                        Opacity(
-                                          opacity: g.backgroundBlurAmount.clamp(
-                                            0.0,
-                                            1.0,
-                                          ),
+                                      Positioned(
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: imageW,
+                                        child: ClipRect(
                                           child: Image.file(
-                                            File(detailPath),
+                                            backgroundFile,
+                                            cacheWidth: cacheWidth,
                                             fit: BoxFit.cover,
-                                            cacheWidth: listCacheWidth,
-                                            cacheHeight: listCacheHeight,
+                                            gaplessPlayback: true,
                                             filterQuality: FilterQuality.low,
                                             errorBuilder: (_, _, _) =>
                                                 const SizedBox.shrink(),
                                           ),
                                         ),
-                                      // 压暗与由左至右大羽化渐变蒙层
-                                      DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                            colors: [
-                                              AppColors.bgDark.withAlpha(153),
-                                              AppColors.bgDark.withAlpha(230),
-                                              AppColors.bgDark,
-                                            ],
-                                            stops: [0.0, 0.65, 1.0],
+                                      ),
+                                      // 均匀压暗层：与网格卡片的压暗处理同风格。
+                                      Positioned(
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: imageW,
+                                        child: const DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: Color(0x4D0D0F12),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: fade.overlayLeft,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: fade.overlayWidth,
+                                        child: IgnorePointer(
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
+                                                colors: [
+                                                  Colors.transparent,
+                                                  rowBg.withAlpha(150),
+                                                  rowBg,
+                                                ],
+                                                stops: fade.stops,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ],
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             ),
                           // 前景内容区

@@ -206,9 +206,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                   ? '前台游玩热图'
                   : (_range == InsightsRange.quarter
                         ? '每周游玩时长'
-                        : (_range == InsightsRange.year
-                              ? '每月游玩时长'
-                              : '每日游玩时长')),
+                        : (_range == InsightsRange.year ? '每月游玩时长' : '每日游玩时长')),
               subtitle: _chart == InsightsChart.heatmap
                   ? '${_rangeLabel(_range)} · 每格代表一个自然日'
                   : (_range == InsightsRange.quarter
@@ -475,7 +473,8 @@ class _DailyBarChart extends StatelessWidget {
         final weekStart = day.subtract(Duration(days: day.weekday - 1));
         if (!buckets.containsKey(weekStart)) {
           buckets[weekStart] = 0;
-          labels[weekStart] = 'W$weekIndex\n${weekStart.month}/${weekStart.day}';
+          labels[weekStart] =
+              'W$weekIndex\n${weekStart.month}/${weekStart.day}';
           weekIndex++;
         }
         buckets[weekStart] = (buckets[weekStart] ?? 0) + (daily[day] ?? 0);
@@ -524,7 +523,8 @@ class _DailyBarChart extends StatelessWidget {
           children: entries
               .map((entry) {
                 final ratio = maxSeconds == 0 ? 0.0 : entry.value / maxSeconds;
-                final label = labels[entry.key] ?? '${entry.key.month}/${entry.key.day}';
+                final label =
+                    labels[entry.key] ?? '${entry.key.month}/${entry.key.day}';
                 return Tooltip(
                   message: '$label\n${formatPlayDuration(entry.value)}',
                   child: Container(
@@ -860,26 +860,17 @@ class _InsightsModel {
     final byGame = <int, int>{};
     var total = 0;
     for (final session in sessions) {
-      if (session.durationSeconds <= 0 || session.gameId == null) continue;
-      var cursor = session.startedAt.isAfter(start) ? session.startedAt : start;
-      var sessionEnd = session.endedAt ?? now;
-      final fallbackEnd = session.startedAt.add(
-        Duration(seconds: session.durationSeconds),
+      final gameId = session.gameId;
+      if (session.durationSeconds <= 0 || gameId == null) continue;
+      final allocated = distributeSessionDurationByDay(
+        session,
+        rangeStart: start,
+        rangeEnd: end,
       );
-      if (!sessionEnd.isAfter(session.startedAt)) sessionEnd = fallbackEnd;
-      final clippedEnd = sessionEnd.isBefore(end) ? sessionEnd : end;
-      if (!clippedEnd.isAfter(cursor)) continue;
-      while (cursor.isBefore(clippedEnd)) {
-        final day = DateTime(cursor.year, cursor.month, cursor.day);
-        final next = day.add(const Duration(days: 1));
-        final chunkEnd = clippedEnd.isBefore(next) ? clippedEnd : next;
-        final seconds = chunkEnd.difference(cursor).inSeconds;
-        if (seconds > 0) {
-          daily[day] = (daily[day] ?? 0) + seconds;
-          byGame[session.gameId!] = (byGame[session.gameId!] ?? 0) + seconds;
-          total += seconds;
-        }
-        cursor = chunkEnd;
+      for (final entry in allocated.entries) {
+        daily[entry.key] = (daily[entry.key] ?? 0) + entry.value;
+        byGame[gameId] = (byGame[gameId] ?? 0) + entry.value;
+        total += entry.value;
       }
     }
     final mergedSessions = mergeSessions(sessions);
