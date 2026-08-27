@@ -801,19 +801,23 @@ class _ActivePill extends StatelessWidget {
         style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
       );
     }
+    final inputIdle = active.phase == TrackingPhase.inputIdle;
+    final color = inputIdle
+        ? AppColors.textSecondary
+        : Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withAlpha(24),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withAlpha(100),
-        ),
+        color: color.withAlpha(24),
+        border: Border.all(color: color.withAlpha(100)),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
-        '${game?.title ?? '游戏'} · ${formatStopwatch(active.elapsedMs)}',
+        inputIdle
+            ? '${game?.title ?? '游戏'} · 无操作已暂停'
+            : '${game?.title ?? '游戏'} · ${formatStopwatch(active.elapsedMs)}',
         style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
+          color: color,
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),

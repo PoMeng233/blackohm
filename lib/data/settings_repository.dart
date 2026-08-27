@@ -23,6 +23,9 @@ abstract final class SettingsKeys {
   /// 统计暂停开关（托盘"暂停统计"）。
   static const trackingPaused = 'tracking.paused';
 
+  /// 游戏前台无键鼠输入 30 分钟后自动暂停计时。
+  static const sleepMonitoring = 'tracking.sleepMonitoring';
+
   /// Bangumi/BGM API token（仅保存在本地设置，不写入日志）。
   static const bangumiToken = 'network.bangumiToken';
 

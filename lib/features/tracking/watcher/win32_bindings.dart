@@ -50,6 +50,14 @@ const int processCommandLineInformation = 60;
 // ─────────────────────────────────────────────────────────────
 
 /// Win64 下 MSG 结构（48 字节）。
+final class LastInputInfo extends Struct {
+  @Uint32()
+  external int cbSize;
+
+  @Uint32()
+  external int dwTime;
+}
+
 final class Msg extends Struct {
   @IntPtr()
   external int hwnd;
@@ -170,6 +178,12 @@ final int Function(int) _unhookWinEvent = _user32
 
 final int Function() _getForegroundWindow = _user32
     .lookupFunction<IntPtr Function(), int Function()>('GetForegroundWindow');
+
+final int Function(Pointer<LastInputInfo>) _getLastInputInfo = _user32
+    .lookupFunction<
+      Int32 Function(Pointer<LastInputInfo>),
+      int Function(Pointer<LastInputInfo>)
+    >('GetLastInputInfo');
 
 final int Function(int, Pointer<Uint32>) _getWindowThreadProcessId = _user32
     .lookupFunction<
@@ -301,6 +315,9 @@ final int Function(int, int, int, Pointer<Utf16>) _createEventW = _kernel32
 final int Function(int) _setEvent = _kernel32
     .lookupFunction<Int32 Function(IntPtr), int Function(int)>('SetEvent');
 
+final int Function() _getTickCount = _kernel32
+    .lookupFunction<Uint32 Function(), int Function()>('GetTickCount');
+
 final int Function(int) _closeHandle = _kernel32
     .lookupFunction<Int32 Function(IntPtr), int Function(int)>('CloseHandle');
 
@@ -368,6 +385,19 @@ int setWinEventHook(Pointer<NativeFunction<WinEventProcNative>> proc) =>
 bool unhookWinEvent(int hook) => _unhookWinEvent(hook) != 0;
 
 int getForegroundWindow() => _getForegroundWindow();
+
+/// 返回当前 Windows 会话最后一次键盘/鼠标输入以来的毫秒数；失败返回 null。
+int? getLastInputIdleMs() {
+  final info = calloc<LastInputInfo>();
+  try {
+    info.ref.cbSize = sizeOf<LastInputInfo>();
+    if (_getLastInputInfo(info) == 0) return null;
+    // dwTime 和 GetTickCount 都是 32 位无符号 tick，按模 2^32 计算可处理回绕。
+    return (_getTickCount() - info.ref.dwTime) & 0xFFFFFFFF;
+  } finally {
+    calloc.free(info);
+  }
+}
 
 /// 返回前台窗口所属进程 PID；失败返回 0。
 int pidForWindow(int hwnd) {

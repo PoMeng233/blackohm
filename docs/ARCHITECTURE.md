@@ -13,7 +13,7 @@ Flutter UI (main isolate)
   │
   ├── TrackingEngine
   │     ├── exePath → gameId 内存索引
-  │     ├── 1 秒时基、3 秒焦点防抖、60 秒批量刷盘
+  │     ├── 1 秒时基、焦点防抖、可选 30 分钟输入空闲暂停、60 秒批量刷盘
   │     └── 活跃状态 Stream（只驱动活跃卡片秒表）
   │
   └── foreground-watcher isolate
@@ -67,7 +67,9 @@ GetForegroundWindow → snapshot（仅 HWND 变化时发消息）
 - `WTSRegisterSessionNotification`：处理 `WM_WTSSESSION_CHANGE` 的 `WTS_SESSION_LOCK` / `WTS_SESSION_UNLOCK`。
 - `RegisterSuspendResumeNotification`：处理 `WM_POWERBROADCAST` 的 `PBT_APMSUSPEND` / `PBT_APMRESUMEAUTOMATIC`。
 
-锁屏和睡眠事件被转化为 `SystemLocked` / `SystemSuspend`。`TrackingEngine` 收到后直接提交当前会话，不经过 3 秒防抖，从而不计算不可交互时间。
+锁屏和睡眠事件被转化为 `SystemLocked` / `SystemSuspend`。`TrackingEngine` 收到后直接提交当前会话，不经过焦点防抖，从而不计算不可交互时间。
+
+可选的睡眠监测在游戏仍为前台时以 `GetLastInputInfo` 检查当前 Windows 会话的最后键盘/鼠标输入；连续 30 分钟无输入会提交当前会话并显示“无操作已暂停”。该检测默认关闭，不安装全局键鼠 Hook，也不记录输入内容；纯 XInput 手柄活动不在本策略的保证范围内。
 
 ### 2.4 权限边界
 
@@ -89,6 +91,8 @@ GetForegroundWindow → snapshot（仅 HWND 变化时发消息）
                       └──────┬──────┘
                     同游戏回归│  超时
                               └────────▶ commit → idle
+
+live + 可选睡眠监测检测到 30 分钟无键盘/鼠标输入 → commit → inputIdle；同一游戏仍前台且检测到新输入时创建新 Session 恢复 live。
 
 任意状态 + 锁屏/睡眠 → immediate commit → idle
 ```

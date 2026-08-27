@@ -55,8 +55,9 @@ RowCoverFade computeRowCoverFade({
 }) {
   final fadeW = (imageWidth * 0.24).clamp(18.0, 180.0).toDouble();
   final overlayLeft = (imageWidth - fadeW).clamp(0.0, rowWidth).toDouble();
-  final overlayWidth =
-      (fadeW + rowWidth * 0.06).clamp(0.0, rowWidth - overlayLeft).toDouble();
+  final overlayWidth = (fadeW + rowWidth * 0.06)
+      .clamp(0.0, rowWidth - overlayLeft)
+      .toDouble();
   // 图片右缘在覆盖区内对应的渐变进度；窄行可能把 overlayWidth clamp 到
   // 小于 fadeW 甚至 0，此时钳回 1.0（零宽覆盖区不渲染，无除零风险）。
   final edgeT = overlayWidth <= 0
@@ -925,6 +926,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 itemBuilder: (context, i) {
                   final g = filtered[i];
                   final isCardActive = activeGameId == g.id;
+                  final isInputIdle =
+                      isCardActive &&
+                      activeState.phase == TrackingPhase.inputIdle;
                   final ratio = maxPlaySeconds > 0
                       ? (g.totalPlaySeconds / maxPlaySeconds).clamp(0.0, 1.0)
                       : 0.0;
@@ -1089,19 +1093,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                     width: 8,
                                     height: 8,
                                     decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      color: isInputIdle
+                                          ? AppColors.textSecondary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    '正在游玩',
+                                    isInputIdle ? '无操作已暂停' : '正在游玩',
                                     style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      color: isInputIdle
+                                          ? AppColors.textSecondary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
                                     ),

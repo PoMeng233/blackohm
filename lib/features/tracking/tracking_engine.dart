@@ -23,8 +23,10 @@ import '../../core/app_constants.dart';
 import '../../core/database/app_database.dart';
 import '../../data/session_repository.dart';
 import 'game_attributor.dart';
+import 'input_idle.dart';
 import 'watcher/foreground_watcher.dart' as watcher_lib;
 import 'watcher/watcher_protocol.dart';
+import 'watcher/win32_bindings.dart' show getLastInputIdleMs;
 
 /// 引擎对 UI 的公开快照。
 class TrackingPublicState {
@@ -32,6 +34,7 @@ class TrackingPublicState {
     required this.gameId,
     required this.elapsedMs,
     required this.phase,
+    this.pauseReason = TrackingPauseReason.none,
   });
 
   static const TrackingPublicState idle = TrackingPublicState(
@@ -43,6 +46,7 @@ class TrackingPublicState {
   final int gameId;
   final int elapsedMs;
   final TrackingPhase phase;
+  final TrackingPauseReason pauseReason;
 
   bool get isActive => phase != TrackingPhase.idle && gameId != 0;
 
@@ -51,13 +55,16 @@ class TrackingPublicState {
       other is TrackingPublicState &&
       other.gameId == gameId &&
       other.elapsedMs == elapsedMs &&
-      other.phase == phase;
+      other.phase == phase &&
+      other.pauseReason == pauseReason;
 
   @override
-  int get hashCode => Object.hash(gameId, elapsedMs, phase);
+  int get hashCode => Object.hash(gameId, elapsedMs, phase, pauseReason);
 }
 
-enum TrackingPhase { idle, live, grace }
+enum TrackingPhase { idle, live, grace, inputIdle }
+
+enum TrackingPauseReason { none, focusLost, manual, inputIdle }
 
 class _ActiveSession {
   _ActiveSession({required this.gameId});
@@ -78,6 +85,11 @@ class TrackingEngine {
 
   _ActiveSession? _active;
   bool _paused = false;
+  bool _sleepMonitoring = false;
+  int? _inputIdleGameId;
+  int? _foregroundGameId;
+  DateTime? _sessionStartedAt;
+  DateTime? _liveStartedAt;
 
   /// 主窗口可见性：隐藏到托盘时暂停秒表推送（计时/落盘不受影响），
   /// 恢复可见时补发一次当前状态。
@@ -97,6 +109,15 @@ class TrackingEngine {
   Stream<TrackingPublicState> get states => _states.stream;
 
   TrackingPublicState get current {
+    final idleGameId = _inputIdleGameId;
+    if (idleGameId != null) {
+      return TrackingPublicState(
+        gameId: idleGameId,
+        elapsedMs: 0,
+        phase: TrackingPhase.inputIdle,
+        pauseReason: TrackingPauseReason.inputIdle,
+      );
+    }
     final a = _active;
     if (a == null) return TrackingPublicState.idle;
     return TrackingPublicState(
@@ -105,6 +126,11 @@ class TrackingEngine {
       phase: _paused || a.graceSince != null
           ? TrackingPhase.grace
           : TrackingPhase.live,
+      pauseReason: _paused
+          ? TrackingPauseReason.manual
+          : (a.graceSince != null
+                ? TrackingPauseReason.focusLost
+                : TrackingPauseReason.none),
     );
   }
 
@@ -157,6 +183,21 @@ class TrackingEngine {
   /// 托盘"暂停统计"。
   void setPaused(bool paused) {
     _paused = paused;
+    // 手动暂停开关不覆盖无操作暂停；恢复手动暂停后仍需等待下一次输入。
+    _emit();
+  }
+
+  void setSleepMonitoring(bool enabled) {
+    _sleepMonitoring = enabled;
+    if (!enabled && _inputIdleGameId != null) {
+      // 关闭监测后不补记暂停期间；当前游戏仍在前台时从现在开始新会话。
+      final gameId = _inputIdleGameId!;
+      _inputIdleGameId = null;
+      if (_foregroundGameId == gameId && !_paused) {
+        _startSession(gameId);
+        return;
+      }
+    }
     _emit();
   }
 
@@ -179,6 +220,8 @@ class TrackingEngine {
         _onSnapshot(s);
       case SystemLocked() || SystemSuspend():
         // 锁屏/睡眠：立即挂起并落盘，无防抖。
+        _inputIdleGameId = null;
+        _foregroundGameId = null;
         await _commitActive();
       case SystemUnlocked() || SystemResumed():
         break; // 解锁后由前台快照自然恢复（新会话）。
@@ -194,19 +237,31 @@ class TrackingEngine {
       windowTitle: s.windowTitle,
       visible: s.visible,
     );
+    _foregroundGameId = gameId;
     if (gameId == null) {
+      final wasInputIdle = _inputIdleGameId != null;
+      _inputIdleGameId = null;
+      _liveStartedAt = null;
       _enterGraceIfNeeded();
+      if (wasInputIdle && _active == null) _emit();
+      return;
+    }
+    if (_inputIdleGameId == gameId) {
+      // 自动暂停时保留前台归因；恢复输入由 tick 创建新会话。
+      _emit();
       return;
     }
     final active = _active;
     if (active != null && active.gameId == gameId) {
       active.graceSince = null; // 防抖窗口内回归：合并为连续 Session
+      _liveStartedAt = DateTime.now();
       _emit();
       return;
     }
     if (active != null) {
-      _commitActive(); // 换游戏：先结前一个（drift 后台 isolate 串行化写入）
+      unawaited(_commitActive()); // 换游戏：先结前一个（Drift 后台串行写入）
     }
+    _inputIdleGameId = null;
     _startSession(gameId);
   }
 
@@ -219,6 +274,8 @@ class TrackingEngine {
 
   void _startSession(int gameId) {
     _active = _ActiveSession(gameId: gameId);
+    _sessionStartedAt = DateTime.now();
+    _liveStartedAt = _sessionStartedAt;
     _lastFlush = DateTime.now();
     // INSERT 会话行（drift 后台 isolate 串行执行，回填 sessionId）。
     _sessions.start(gameId, DateTime.now()).then((id) {
@@ -230,34 +287,80 @@ class TrackingEngine {
     _emit();
   }
 
-  // ── 1s tick：累加 / 防抖超时 / 周期刷盘 ──────────────────────
+  // ── 1s tick：累加 / 防抖超时 / 输入空闲 / 周期刷盘 ──────────
 
   void _onTick() {
+    final idleGameId = _inputIdleGameId;
+    if (idleGameId != null) {
+      _handleInputIdlePause(idleGameId);
+      return;
+    }
+
     final a = _active;
     if (a == null) return;
     final live = a.graceSince == null && !_paused;
+    if (live && _sleepMonitoring) {
+      final idleMs = getLastInputIdleMs();
+      final liveDuration = _liveStartedAt == null
+          ? Duration.zero
+          : DateTime.now().difference(_liveStartedAt!);
+      // 仅将“当前连续前台期间系统整体无输入”视为睡眠，
+      // 避免切回游戏前在其它窗口的旧空闲时间立即触发暂停。
+      if (shouldPauseForInputIdle(
+        monitoringEnabled: _sleepMonitoring,
+        live: live,
+        liveDuration: liveDuration,
+        idleMs: idleMs,
+      )) {
+        _inputIdleGameId = a.gameId;
+        unawaited(_commitActive());
+        _emit();
+        return;
+      }
+    }
     if (live) a.accumulatedMs += 1000;
 
     // 防抖超时 → 会话终结
     final grace = a.graceSince;
     if (grace != null &&
         DateTime.now().difference(grace) >= kFocusGracePeriod) {
-      _commitActive();
+      unawaited(_commitActive());
       return;
     }
     // 周期刷盘（内存累加 → SQLite）
     if (live &&
         DateTime.now().difference(_lastFlush) >= kSessionFlushInterval) {
       _lastFlush = DateTime.now();
-      _sessions.flushProgress(a.sessionId, a.accumulatedMs ~/ 1000);
+      unawaited(_sessions.flushProgress(a.sessionId, a.accumulatedMs ~/ 1000));
     }
     _emit();
+  }
+
+  void _handleInputIdlePause(int gameId) {
+    if (!_sleepMonitoring || _foregroundGameId != gameId) {
+      _inputIdleGameId = null;
+      if (_foregroundGameId == gameId && !_paused) {
+        _startSession(gameId);
+      } else {
+        _emit();
+      }
+      return;
+    }
+    final idleMs = getLastInputIdleMs();
+    if (idleMs == null || hasReachedInputIdleThreshold(idleMs) || _paused) {
+      _emit();
+      return;
+    }
+    _inputIdleGameId = null;
+    _startSession(gameId);
   }
 
   /// 结束当前会话并落盘（含 totalPlaySeconds 增量）。
   Future<void> _commitActive() async {
     final a = _active;
     _active = null;
+    _sessionStartedAt = null;
+    _liveStartedAt = null;
     if (a == null) return;
     final seconds = a.accumulatedMs ~/ 1000;
     if (seconds <= 0) {

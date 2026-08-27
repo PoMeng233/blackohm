@@ -8,6 +8,9 @@ const Duration kFocusPausePeriod = Duration(minutes: 1);
 /// 直到该窗口结束才提交；历史层也以此窗口合并相邻记录。
 const Duration kFocusGracePeriod = Duration(minutes: 30);
 
+/// 游戏仍在前台但连续未发生键盘/鼠标输入时，自动暂停计时的阈值。
+const Duration kInputIdlePausePeriod = Duration(minutes: 30);
+
 /// 活跃 Session 的刷盘周期（内存累加，低频批量提交 SQLite，避免频繁 I/O）。
 const Duration kSessionFlushInterval = Duration(seconds: 60);
 

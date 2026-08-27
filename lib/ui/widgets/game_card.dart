@@ -51,7 +51,10 @@ class _GameCardState extends ConsumerState<GameCard> {
     final isActive = activeState.isActive;
     final isLive = activeState.phase == TrackingPhase.live;
     final isGrace = activeState.phase == TrackingPhase.grace;
-    final trackingColor = isGrace ? AppColors.error : context.interactiveColor;
+    final isInputIdle = activeState.phase == TrackingPhase.inputIdle;
+    final trackingColor = isGrace
+        ? AppColors.error
+        : (isInputIdle ? AppColors.textSecondary : context.interactiveColor);
     final backgroundPath = widget.game.backgroundPath;
     final backgroundFile = backgroundPath == null || backgroundPath.isEmpty
         ? null
@@ -187,7 +190,9 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  formatStopwatch(activeState.elapsedMs),
+                                  isInputIdle
+                                      ? '无操作已暂停'
+                                      : formatStopwatch(activeState.elapsedMs),
                                   style: TextStyle(
                                     color: trackingColor,
                                     fontSize: 11,

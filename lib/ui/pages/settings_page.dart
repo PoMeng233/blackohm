@@ -70,9 +70,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final controllerText = _bangumiTokenCtrl.text.trim();
     final token = controllerText.isNotEmpty ? controllerText : saved;
     if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先粘贴 Bangumi API Token')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先粘贴 Bangumi API Token')));
       return;
     }
 
@@ -82,8 +82,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         .get(SettingsKeys.bangumiToken);
     if (!mounted) return;
     final storageMismatch =
-        persisted.trim().isNotEmpty &&
-        persisted.trim() != token;
+        persisted.trim().isNotEmpty && persisted.trim() != token;
 
     setState(() => _testingToken = true);
     final result = await BangumiImageSearchService().fetchSubjectDetailed(
@@ -95,16 +94,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     final status = result.statusCode;
     if (result.candidate != null) {
-      final extra = storageMismatch
-          ? '（注意：输入框与已保存值不一致，可能尚未保存成功）'
-          : '';
+      final extra = storageMismatch ? '（注意：输入框与已保存值不一致，可能尚未保存成功）' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Token 有效：${result.candidate!.title}$extra')),
       );
     } else if (status == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络异常/超时，无法连接 Bangumi API')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('网络异常/超时，无法连接 Bangumi API')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -386,6 +383,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 value: settings.startHidden,
                 activeThumbColor: Theme.of(context).colorScheme.primary,
                 onChanged: notifier.setStartHidden,
+              ),
+              const Divider(height: 1, color: AppColors.border),
+              SwitchListTile(
+                title: const Text('睡眠监测'),
+                subtitle: const Text('游戏保持前台但 30 分钟没有键盘/鼠标输入时，自动暂停计时；关闭后不检测'),
+                value: settings.sleepMonitoring,
+                activeThumbColor: Theme.of(context).colorScheme.primary,
+                onChanged: notifier.setSleepMonitoring,
               ),
               const Divider(height: 1, color: AppColors.border),
               SwitchListTile(

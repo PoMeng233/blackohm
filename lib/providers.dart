@@ -109,6 +109,7 @@ class AppSettingsState {
     this.startHidden = false,
     this.closeToTray = true,
     this.trackingPaused = false,
+    this.sleepMonitoring = false,
     this.bangumiToken = '',
     this.shellBackgroundPath = '',
     this.themePalette = ThemePalette.obsidian,
@@ -120,6 +121,7 @@ class AppSettingsState {
   final bool startHidden;
   final bool closeToTray;
   final bool trackingPaused;
+  final bool sleepMonitoring;
   final String bangumiToken;
   final String shellBackgroundPath;
   final ThemePalette themePalette;
@@ -131,6 +133,7 @@ class AppSettingsState {
     bool? startHidden,
     bool? closeToTray,
     bool? trackingPaused,
+    bool? sleepMonitoring,
     String? bangumiToken,
     String? shellBackgroundPath,
     ThemePalette? themePalette,
@@ -141,6 +144,7 @@ class AppSettingsState {
     startHidden: startHidden ?? this.startHidden,
     closeToTray: closeToTray ?? this.closeToTray,
     trackingPaused: trackingPaused ?? this.trackingPaused,
+    sleepMonitoring: sleepMonitoring ?? this.sleepMonitoring,
     bangumiToken: bangumiToken ?? this.bangumiToken,
     shellBackgroundPath: shellBackgroundPath ?? this.shellBackgroundPath,
     themePalette: themePalette ?? this.themePalette,
@@ -170,6 +174,7 @@ class SettingsController extends StateNotifier<AppSettingsState> {
       defaultValue: true,
     );
     final paused = await _repo.getBool(SettingsKeys.trackingPaused);
+    final sleepMonitoring = await _repo.getBool(SettingsKeys.sleepMonitoring);
     final bangumiToken = await _repo.get(SettingsKeys.bangumiToken);
     final shellBackgroundPath = await _repo.get(
       SettingsKeys.shellBackgroundPath,
@@ -185,11 +190,14 @@ class SettingsController extends StateNotifier<AppSettingsState> {
       startHidden: startHidden,
       closeToTray: closeToTray,
       trackingPaused: paused,
+      sleepMonitoring: sleepMonitoring,
       bangumiToken: bangumiToken,
       shellBackgroundPath: shellBackgroundPath,
       themePalette: themePalette ?? ThemePalette.obsidian,
     );
-    _engine.setPaused(paused);
+    _engine
+      ..setPaused(paused)
+      ..setSleepMonitoring(sleepMonitoring);
   }
 
   Future<void> setLeProcPath(String v) async {
@@ -221,6 +229,12 @@ class SettingsController extends StateNotifier<AppSettingsState> {
     state = state.copyWith(trackingPaused: v);
     await _repo.setBool(SettingsKeys.trackingPaused, v);
     _engine.setPaused(v);
+  }
+
+  Future<void> setSleepMonitoring(bool v) async {
+    state = state.copyWith(sleepMonitoring: v);
+    await _repo.setBool(SettingsKeys.sleepMonitoring, v);
+    _engine.setSleepMonitoring(v);
   }
 
   Future<void> setBangumiToken(String v) async {

@@ -23,7 +23,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 ## 核心能力
 
 - **事件驱动的精准计时**：通过 `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` 捕获焦点切换；`GetForegroundWindow → PID → QueryFullProcessImageNameW` 获得真实镜像路径并与游戏库 O(1) 匹配。
-- **不会把挂机计入时长**：窗口失焦、切换到浏览器、最小化、锁屏或睡眠时停止累加；仅短于 3 秒的焦点切换会合并为同一连续 Session。未来可能添加防睡眠机制。
+- **不会把挂机计入时长**：窗口失焦、切换到浏览器、最小化、锁屏或睡眠时停止累加；可选睡眠监测会在游戏保持前台但 30 分钟无键盘/鼠标输入时自动暂停。
 - **低资源后台守护**：焦点 watcher 运行在独立 Isolate，空闲时阻塞于 `MsgWaitForMultipleObjectsEx` 内核等待；另有每秒一次的轻量心跳兜底——同窗口快速门控加镜像路径缓存，稳态 CPU 占用趋近 0%。
 - **自动背景图搜索/bangumi词条匹配**：在设置里面配置好access token后即可自动匹配游戏封面以及游戏评分。
 - **拖拽扫描与多 Exe 决策**：目录扫描采用深度限制 BFS 与候选数量上限，不按 exe 文件名、PE 产品名或游戏引擎过滤；单候选自动入库，多候选完整展示并标记已入库项。
@@ -38,7 +38,7 @@ BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `
 
 ```text
 flutter analyze                         # No issues found
-flutter test                            # 74 tests passed
+flutter test                            # all tests passed
 flutter build windows --release         # 成功生成 blackohm.exe
 ```
 

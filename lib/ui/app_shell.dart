@@ -1,6 +1,7 @@
 /// 应用主框架：现代侧边栏 + 路由视图 + 全窗口拖拽注入 + 托盘生命周期绑定。
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import '../core/database/app_database.dart';
 import '../features/launcher/launch_service.dart';
 import '../features/scanner/ingestion_service.dart';
+import '../features/tracking/tracking_engine.dart';
 import '../features/tray/tray_service.dart';
 import '../providers.dart';
 import 'drop_zone.dart';
@@ -28,14 +30,21 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   int _navIndex = 0;
+  bool _uiVisible = true;
   final Set<int> _visitedPages = {0};
   TrayService? _tray;
   ProviderSubscription<AsyncValue<List<Game>>>? _recentGamesSubscription;
   ProviderSubscription<AppSettingsState>? _settingsSubscription;
+  ProviderSubscription<AsyncValue<TrackingPublicState>>? _trackingSubscription;
+  int? _pendingInputIdleNoticeGameId;
+  int? _shownInputIdleNoticeGameId;
 
   @override
   void initState() {
     super.initState();
+    _uiVisible = !ref.read(settingsProvider).startHidden;
+    ref.read(windowVisibleProvider.notifier).state = _uiVisible;
+    ref.read(trackingEngineProvider).setUiVisible(_uiVisible);
     windowManager.addListener(this);
     // 触发 Bangumi 自动富化监听（新增游戏后异步拉评分/封面）。
     ref.read(bangumiEnrichmentProvider);
@@ -80,21 +89,64 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     _settingsSubscription = ref.listenManual(settingsProvider, (_, next) {
       tray.updatePaused(next.trackingPaused);
     });
+    _trackingSubscription = ref.listenManual(trackingStateProvider, (_, next) {
+      final state = next.valueOrNull;
+      if (state?.phase == TrackingPhase.inputIdle) {
+        _pendingInputIdleNoticeGameId = state!.gameId;
+        _showPendingInputIdleNotice();
+      } else if (state != null && state.phase != TrackingPhase.inputIdle) {
+        _pendingInputIdleNoticeGameId = null;
+        _shownInputIdleNoticeGameId = null;
+      }
+    });
+  }
+
+  Future<void> _showPendingInputIdleNotice() async {
+    final gameId = _pendingInputIdleNoticeGameId;
+    if (gameId == null ||
+        !_uiVisible ||
+        _shownInputIdleNoticeGameId == gameId ||
+        !mounted) {
+      return;
+    }
+    _shownInputIdleNoticeGameId = gameId;
+    final game = await ref.read(gameRepoProvider).watchById(gameId).first;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.pause_circle_outline_rounded),
+        title: const Text('计时已暂停'),
+        content: Text(
+          '检测到“${game?.title ?? '当前游戏'}”已连续 30 分钟没有键盘/鼠标输入。暂停期间不会计入游玩时长，恢复输入后会自动继续记录。',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
     _recentGamesSubscription?.close();
     _settingsSubscription?.close();
+    _trackingSubscription?.close();
     windowManager.removeListener(this);
     _tray?.dispose();
     super.dispose();
   }
 
   void _setWindowVisibility(bool visible) {
+    if (mounted) setState(() => _uiVisible = visible);
+
     ref.read(memoryTrimProvider).windowVisible = visible;
     ref.read(windowVisibleProvider.notifier).state = visible;
     ref.read(trackingEngineProvider).setUiVisible(visible);
+    if (visible) unawaited(_showPendingInputIdleNotice());
   }
 
   @override
@@ -275,23 +327,27 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
                             const Spacer(),
                             Consumer(
                               builder: (_, ref, _) {
-                                final active =
-                                    ref
-                                        .watch(trackingStateProvider)
-                                        .value
-                                        ?.isActive ??
-                                    false;
+                                final state = ref
+                                    .watch(trackingStateProvider)
+                                    .valueOrNull;
+                                final active = state?.isActive ?? false;
+                                final inputIdle =
+                                    state?.phase == TrackingPhase.inputIdle;
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
                                   child: Tooltip(
-                                    message: active ? '正在前台计时' : '后台守护中',
+                                    message: inputIdle
+                                        ? '无操作已暂停计时'
+                                        : (active ? '正在前台计时' : '后台守护中'),
                                     child: Container(
                                       width: 10,
                                       height: 10,
                                       decoration: BoxDecoration(
-                                        color: active
-                                            ? context.interactiveColor
-                                            : AppColors.textMuted,
+                                        color: inputIdle
+                                            ? AppColors.textSecondary
+                                            : (active
+                                                  ? context.interactiveColor
+                                                  : AppColors.textMuted),
                                         shape: BoxShape.circle,
                                         boxShadow: null,
                                       ),
