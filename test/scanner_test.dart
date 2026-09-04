@@ -13,7 +13,7 @@ void main() {
     late Directory root;
 
     setUp(() async {
-      root = await Directory.systemTemp.createTemp('blackohm_scanner_test_');
+      root = await _tempDir('blackohm_scanner_test_');
     });
 
     tearDown(() async {
@@ -114,9 +114,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repo = GameRepository(db);
       final service = IngestionService(repo);
-      final root = await Directory.systemTemp.createTemp(
-        'blackohm_all_exes_test_',
-      );
+      final root = await _tempDir('blackohm_all_exes_test_');
       try {
         await _write(root, 'ExHIBIT.exe');
         await _write(root, 'acmp.exe');
@@ -144,9 +142,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repo = GameRepository(db);
       final service = IngestionService(repo);
-      final root = await Directory.systemTemp.createTemp(
-        'blackohm_existing_exe_test_',
-      );
+      final root = await _tempDir('blackohm_existing_exe_test_');
       try {
         final mainExe = await _write(root, 'Shamrock.exe');
         await _write(root, 'エンジン設定.exe');
@@ -188,7 +184,7 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final repo = GameRepository(db);
     final service = IngestionService(repo);
-    final root = await Directory.systemTemp.createTemp('blackohm_title_test_');
+    final root = await _tempDir('blackohm_title_test_');
     final gameDir = Directory(
       '${root.path}${Platform.pathSeparator}鍵を隠したカゴのトリ',
     );
@@ -210,9 +206,7 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final repo = GameRepository(db);
     final service = IngestionService(repo);
-    final root = await Directory.systemTemp.createTemp(
-      'blackohm_exhibit_test_',
-    );
+    final root = await _tempDir('blackohm_exhibit_test_');
     final gameDir = Directory(
       '${root.path}${Platform.pathSeparator}鍵を隠したカゴのトリ',
     );
@@ -257,9 +251,7 @@ void main() {
     final folder = await (db.select(
       db.gameFolders,
     )..where((f) => f.name.equals('在玩'))).getSingle();
-    final tempDir = await Directory.systemTemp.createTemp(
-      'blackohm_ingest_folder_test_',
-    );
+    final tempDir = await _tempDir('blackohm_ingest_folder_test_');
     try {
       final exe = File(
         '${tempDir.path}${Platform.pathSeparator}sample_game.exe',
@@ -276,6 +268,16 @@ void main() {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
     }
   });
+}
+
+/// 创建临时目录并展开为最终路径。
+///
+/// 入库登记走 `resolveSymbolicLinks`（会展开 8.3 短路径段），而扫描对比只做
+/// 字符串标准化；CI 的 TEMP 常是短路径形式（RUNNER~1），必须统一展开，
+/// 否则 `alreadyAdded` 的路径匹配两端不一致。
+Future<Directory> _tempDir(String prefix) async {
+  final dir = await Directory.systemTemp.createTemp(prefix);
+  return Directory(await dir.resolveSymbolicLinks());
 }
 
 Future<File> _write(Directory root, String relative, {int bytes = 1}) async {
