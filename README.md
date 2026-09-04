@@ -172,6 +172,28 @@ Drift 修改后额外执行：
 dart run build_runner build
 ```
 
+## CI/CD
+
+项目使用 GitHub Actions（`.github/workflows/`）：
+
+- **CI**（`ci.yml`）：push 到 `main` 或提交 PR 时，在 `windows-latest` 上依次执行
+  `pub get --enforce-lockfile` → `build_runner` 一致性校验 → `dart format` 检查 →
+  `flutter analyze --fatal-infos` → `flutter test` → `flutter build windows --release` 构建冒烟。
+  Flutter 版本固定为 `flutter-version` 指定的 stable 版本，与本地开发保持一致。
+- **Release**（`release.yml`）：推送 `v*` tag（如 `v0.2.6`）时触发，校验 tag 与
+  `pubspec.yaml` 的 `version` 一致后，跑完整质量门并构建 Release，打包
+  `BlackOhm-<tag>-windows-x64.zip` 与 SHA256 校验文件，从 `CHANGELOG.md`
+  提取对应版本说明，自动创建 GitHub Release。
+
+发版流程：
+
+```bash
+# 1. 更新 pubspec.yaml 的 version 与 CHANGELOG.md（标题格式 "## x.y.z+n"）
+# 2. 提交后打 tag 并推送
+git tag v0.2.6
+git push origin main v0.2.6
+```
+
 替换应用图标后，将源图放到 `assets/icon_source.png`，执行：
 
 ```bash

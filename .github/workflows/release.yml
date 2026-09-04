@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches pubspec version
+        shell: bash
+        # tag 风格为 v0.2.5，pubspec 版本为 0.2.5+7（+build 号不参与 tag 比对）
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PUBSPEC_VERSION="$(grep -oP '(?<=^version: )[0-9]+\.[0-9]+\.[0-9]+' pubspec.yaml)"
+          echo "tag=$TAG pubspec=$PUBSPEC_VERSION"
+          if [ "$TAG" != "$PUBSPEC_VERSION" ]; then
+            echo "::error::tag v$TAG 与 pubspec.yaml version ($PUBSPEC_VERSION) 不一致。"
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # 与本地验证所用版本一致；升级 Flutter 时同步更新
+          flutter-version: 3.44.9
+          cache: true
+
+      - name: Pub get (enforce lockfile)
+        run: flutter pub get --enforce-lockfile
+
+      - name: Regenerate build_runner code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Fail if generator produced a diff
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- '*.g.dart'; then
+            echo "::error::生成的 .g.dart 与仓库不一致：请运行 dart run build_runner build 并提交更新后再打 tag。"
+            exit 1
+          fi
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        shell: bash
+        # CHANGELOG 标题风格为 "## 0.2.5+7"，按 tag 对应的版本号（含 +build）提取。
+        # 用字符串精确相等而不是正则，避免版本号中的 "+" 被当作量词。
+        run: |
+          VERSION="$(grep -oP '(?<=^version: )[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+' pubspec.yaml)"
+          awk -v ver="$VERSION" '
+            $0 == "## " ver { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "::warning::CHANGELOG.md 中未找到版本 $VERSION 的条目，使用占位说明。"
+            echo "Release $GITHUB_REF_NAME" > release_notes.md
+          fi
+          cat release_notes.md
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $stage = "dist/BlackOhm"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item -Recurse -Force "build/windows/x64/runner/Release/*" $stage
+          Compress-Archive -Path "dist/BlackOhm" -DestinationPath "dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip"
+
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $zip = "dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $zip -Leaf)" | Out-File -Encoding ascii "dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip.sha256"
+          Get-Content "dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlackOhm-${{ github.ref_name }}-windows-x64
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          files: |
+            dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip
+            dist/BlackOhm-${{ github.ref_name }}-windows-x64.zip.sha256
+          fail_on_unmatched_files: true

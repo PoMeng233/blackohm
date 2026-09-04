@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Analyze / Test / Build (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # 与本地验证所用版本一致；升级 Flutter 时同步更新
+          flutter-version: 3.44.9
+          cache: true
+
+      - name: Show flutter version
+        run: flutter --version
+
+      # pubspec.lock 已提交；enforce-lockfile 保证 CI 解析结果与仓库锁定一致，
+      # 防止 lock 文件被镜像环境改写后静默替换依赖版本。
+      - name: Pub get (enforce lockfile)
+        run: flutter pub get --enforce-lockfile
+
+      # app_database.g.dart 已提交；若改了 Drift 表定义却忘记重新生成，这里会失败。
+      - name: Regenerate build_runner code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Fail if generator produced a diff
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- '*.g.dart'; then
+            echo "::error::生成的 .g.dart 与仓库不一致：请运行 dart run build_runner build 并提交更新。"
+            exit 1
+          fi
+
+      - name: Verify formatting
+        # 只检查 git 索引内的源码，避免扫到 build/ 等目录里的生成产物
+        shell: bash
+        run: git ls-files -z '*.dart' | xargs -0 dart format --output=none --set-exit-if-changed
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Smoke check build output
+        shell: bash
+        run: test -f build/windows/x64/runner/Release/blackohm.exe
