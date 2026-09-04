@@ -114,9 +114,7 @@ class BangumiEnrichmentCoordinator {
 
   static String _exeStem(String path) {
     final name = _basename(path).toLowerCase();
-    return name.endsWith('.exe')
-        ? name.substring(0, name.length - 4)
-        : name;
+    return name.endsWith('.exe') ? name.substring(0, name.length - 4) : name;
   }
 
   /// 保守选图：交由标题匹配器判断，单个错误结果也绝不采用。

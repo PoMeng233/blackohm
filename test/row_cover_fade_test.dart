@@ -13,7 +13,6 @@ void main() {
   }
 
   group('横排封面渐隐几何（computeRowCoverFade）', () {
-
     test('典型大图：全不透明点精确落在图片右缘（修复硬切缝）', () {
       final f = computeRowCoverFade(rowWidth: 1200, imageWidth: 750);
       expect(f.overlayLeft, closeTo(570, eps));

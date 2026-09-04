@@ -90,15 +90,15 @@ class BangumiImageSearchService {
     required int subjectId,
     required String token,
   }) async {
-    return (await fetchSubjectDetailed(subjectId: subjectId, token: token))
-        .candidate;
+    return (await fetchSubjectDetailed(
+      subjectId: subjectId,
+      token: token,
+    )).candidate;
   }
 
   /// 返回 HTTP 状态码与候选结果的诊断封装，便于设置页自检时给出明确提示。
-  Future<({int? statusCode, BangumiImageCandidate? candidate})> fetchSubjectDetailed({
-    required int subjectId,
-    required String token,
-  }) async {
+  Future<({int? statusCode, BangumiImageCandidate? candidate})>
+  fetchSubjectDetailed({required int subjectId, required String token}) async {
     if (subjectId <= 0 || token.trim().isEmpty) {
       return (statusCode: null, candidate: null);
     }

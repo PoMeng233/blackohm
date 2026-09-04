@@ -42,7 +42,11 @@ class GameIcon extends ConsumerWidget {
       );
     }
     if (!boxed) {
-      return Icon(fallbackIcon, color: AppColors.textMuted, size: iconSize ?? size);
+      return Icon(
+        fallbackIcon,
+        color: AppColors.textMuted,
+        size: iconSize ?? size,
+      );
     }
     return Container(
       width: size,

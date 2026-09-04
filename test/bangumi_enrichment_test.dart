@@ -52,7 +52,9 @@ void main() {
     });
 
     test('键隠すカゴのトリ不会匹配到「100门挑战」', () {
-      final wrong = [_c('100门挑战 - 找到厕所的钥匙', id: 999, nameCn: '100门挑战 - 找到厕所的钥匙')];
+      final wrong = [
+        _c('100门挑战 - 找到厕所的钥匙', id: 999, nameCn: '100门挑战 - 找到厕所的钥匙'),
+      ];
       expect(BangumiTitleMatcher.pickBest(wrong, '鍵を隠したカゴのトリ'), isNull);
     });
 
@@ -92,10 +94,7 @@ void main() {
         exePath: r'g:\galgame\aimusume\game.exe',
         dirPath: r'g:\galgame\aimusume',
       );
-      expect(
-        BangumiEnrichmentCoordinator.searchQueryForGame(g),
-        '愛娘という名の玩具',
-      );
+      expect(BangumiEnrichmentCoordinator.searchQueryForGame(g), '愛娘という名の玩具');
     });
   });
 
