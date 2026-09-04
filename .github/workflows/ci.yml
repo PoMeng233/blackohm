@@ -35,7 +35,7 @@ jobs:
 
       # app_database.g.dart 已提交；若改了 Drift 表定义却忘记重新生成，这里会失败。
       - name: Regenerate build_runner code
-        run: dart run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build
       - name: Fail if generator produced a diff
         shell: bash
         run: |
