@@ -36,17 +36,31 @@ class TrayService with TrayListener {
   }
 
   /// tray_manager 需要磁盘路径；Flutter asset 在 Release 包内不是可直接访问的文件。
-  /// 首次启动时将 ICO 写入应用支持目录，之后复用同一文件。
+  /// 首次启动时把内置 ICO 写入应用支持目录，之后复用。
+  ///
+  /// 不能只判断文件是否存在：应用更新后内置 ICO 会变化，旧缓存会让托盘一直
+  /// 显示上一版图标。这里比对字节，仅在内容不同时重写。
   Future<String> _materializeTrayIcon() async {
     final dir = await getApplicationSupportDirectory();
     final icon = File(p.join(dir.path, 'tray.ico'));
-    if (!await icon.exists()) {
-      final asset = await rootBundle.load('assets/tray.ico');
-      await icon.writeAsBytes(
-        asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes),
-      );
+    final asset = await rootBundle.load('assets/tray.ico');
+    final bytes = asset.buffer.asUint8List(
+      asset.offsetInBytes,
+      asset.lengthInBytes,
+    );
+    final cached = await icon.exists() ? await icon.readAsBytes() : null;
+    if (cached == null || !_sameBytes(cached, bytes)) {
+      await icon.writeAsBytes(bytes, flush: true);
     }
     return icon.path;
+  }
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   Future<void> updateRecent(List<({int id, String title})> recent) async {
