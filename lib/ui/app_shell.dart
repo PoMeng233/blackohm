@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import '../core/database/app_database.dart';
 import '../features/launcher/launch_service.dart';
 import '../features/scanner/ingestion_service.dart';
+import '../features/scanner/library_scanner.dart';
 import '../features/tracking/tracking_engine.dart';
 import '../features/tray/tray_service.dart';
 import '../providers.dart';
@@ -20,6 +21,7 @@ import 'pages/library_page.dart';
 import 'pages/settings_page.dart';
 import 'theme.dart';
 import 'widgets/exe_decision_dialog.dart';
+import 'widgets/library_import_dialog.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -172,8 +174,37 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   Future<void> _onDropped(List<String> paths) async {
     final targetFolderId = ref.read(currentBrowsingFolderIdProvider);
     final svc = IngestionService(ref.read(gameRepoProvider));
+
+    // 先分离「游戏库根目录」与普通拖入项：库根走批量导入，其余保持原流程。
+    final libraryRoots = <String>[];
+    final singlePaths = <String>[];
+    for (final path in paths) {
+      final isDir =
+          FileSystemEntity.typeSync(path, followLinks: true) ==
+          FileSystemEntityType.directory;
+      final layout = isDir
+          ? await detectLibraryLayoutInIsolate(path)
+          : const LibraryLayout.singleGame();
+      if (layout.isLibrary) {
+        libraryRoots.add(path);
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => LibraryImportDialog(
+            layout: layout,
+            service: svc,
+            folderId: targetFolderId,
+          ),
+        );
+      } else {
+        singlePaths.add(path);
+      }
+    }
+    if (singlePaths.isEmpty) return;
+
     final report = await svc.ingestDroppedPaths(
-      paths,
+      singlePaths,
       folderId: targetFolderId,
     );
     if (!mounted) return;

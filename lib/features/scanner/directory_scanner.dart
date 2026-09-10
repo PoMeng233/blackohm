@@ -51,6 +51,10 @@ const Set<String> _dirBlacklist = {
   'system volume information',
 };
 
+/// 该目录名是否属于运行库/安装器聚集地（扫描时应跳过）。
+bool isIgnoredDirectoryName(String name) =>
+    _dirBlacklist.contains(name.toLowerCase());
+
 /// 递归扫描 [rootDir] 下的游戏 exe 候选。
 /// 深度限制 [maxDepth]，返回按评分降序的候选列表（可能为空）。
 List<ExeCandidate> scanForGameExes(String rootDir, {int? maxDepth}) {

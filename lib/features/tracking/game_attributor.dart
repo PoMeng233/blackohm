@@ -35,13 +35,22 @@ class GameMatchEntry {
 
 class GameAttributor {
   final Map<String, int> _exeIndex = {};
+  final Map<int, String> _exeFileNameByGame = {};
   final List<GameMatchEntry> _entries = [];
+
+  /// 该游戏 exe 的文件名（小写、含扩展名），用于判断游戏进程是否仍在运行。
+  String? exeFileNameFor(int gameId) => _exeFileNameByGame[gameId];
 
   /// 库变化时重建索引（与 TrackingEngine.rebuildIndex 同频）。
   void rebuild(List<Game> games) {
     _exeIndex
       ..clear()
       ..addEntries(games.map((g) => MapEntry(g.exePath, g.id)));
+    _exeFileNameByGame
+      ..clear()
+      ..addEntries(
+        games.map((g) => MapEntry(g.id, _basename(g.exePath).toLowerCase())),
+      );
     _entries
       ..clear()
       ..addAll(

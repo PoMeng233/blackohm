@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/app_constants.dart';
 import '../../data/settings_repository.dart';
 import '../../features/background/background_service.dart';
+import '../../features/data/backup_service.dart';
 import '../../providers.dart';
 import '../theme.dart';
 
@@ -28,6 +29,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _leProfileCtrl;
   late final TextEditingController _bangumiTokenCtrl;
   bool _testingToken = false;
+  bool _busyData = false;
 
   @override
   void initState() {
@@ -63,6 +65,163 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  BackupService get _backupService => BackupService(ref.read(databaseProvider));
+
+  void _notify(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? AppColors.error : null,
+      ),
+    );
+  }
+
+  Future<void> _exportDatabase() async {
+    if (_busyData) return;
+    final stamp = DateTime.now();
+    final name =
+        'blackohm-backup-${stamp.year}'
+        '${stamp.month.toString().padLeft(2, '0')}'
+        '${stamp.day.toString().padLeft(2, '0')}'
+        '-${stamp.hour.toString().padLeft(2, '0')}'
+        '${stamp.minute.toString().padLeft(2, '0')}.db';
+    final target = await FilePicker.saveFile(
+      dialogTitle: '导出数据库备份',
+      fileName: name,
+      type: FileType.custom,
+      allowedExtensions: const ['db'],
+    );
+    if (target == null || target.isEmpty || !mounted) return;
+    setState(() => _busyData = true);
+    try {
+      await _backupService.exportTo(target);
+      _notify('数据库已导出到 $target');
+    } catch (e) {
+      _notify('导出失败：$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busyData = false);
+    }
+  }
+
+  Future<void> _loadDatabase() async {
+    if (_busyData) return;
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: '选择数据库备份',
+      type: FileType.custom,
+      allowedExtensions: const ['db'],
+    );
+    final source = picked?.files.single.path;
+    if (source == null || source.isEmpty || !mounted) return;
+
+    setState(() => _busyData = true);
+    try {
+      final service = _backupService;
+      if (!await service.validateBackup(source)) {
+        _notify('该文件不是有效的 BlackOhm 数据库备份', error: true);
+        return;
+      }
+      if (!mounted) return;
+      final mode = await showDialog<BackupLoadMode>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('加载方式'),
+          content: const Text(
+            '合并到当前数据库：只新增当前库还没有的游戏，已有游戏整款跳过。\n\n'
+            '覆盖当前数据库：先清空现有游戏与游玩记录，再完整导入备份内容。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, BackupLoadMode.merge),
+              child: const Text('合并到当前数据库'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, BackupLoadMode.overwrite),
+              child: const Text('覆盖当前数据库'),
+            ),
+          ],
+        ),
+      );
+      if (mode == null || !mounted) return;
+
+      if (mode == BackupLoadMode.overwrite) {
+        final confirmed = await _confirm(
+          title: '确认覆盖当前数据库？',
+          message: '当前库中的全部游戏卡片与游玩记录将被删除，并替换为备份内容。此操作不可撤销。',
+          confirmLabel: '覆盖导入',
+        );
+        if (!confirmed || !mounted) return;
+      }
+
+      final result = await service.loadFrom(source, mode: mode);
+      _notify(
+        '加载完成：新增 ${result.importedGames} 款、'
+        '跳过已存在 ${result.skippedGames} 款、'
+        '导入记录 ${result.importedSessions} 条',
+      );
+    } catch (e) {
+      _notify('加载失败：$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busyData = false);
+    }
+  }
+
+  Future<void> _clearDatabase() async {
+    if (_busyData) return;
+    final first = await _confirm(
+      title: '确认清空数据库？',
+      message: '将删除全部游戏卡片与游玩记录。设置、Token、主题与文件夹分组会保留。',
+      confirmLabel: '继续',
+    );
+    if (!first || !mounted) return;
+    final second = await _confirm(
+      title: '再次确认清空',
+      message: '此操作不可撤销，且不会自动备份。建议先导出数据库备份。',
+      confirmLabel: '确认清空',
+    );
+    if (!second || !mounted) return;
+
+    setState(() => _busyData = true);
+    try {
+      final removed = await _backupService.clearGames();
+      _notify('已清空 $removed 款游戏及其游玩记录');
+    } catch (e) {
+      _notify('清空失败：$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busyData = false);
+    }
+  }
+
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _testBangumiToken() async {
     // 优先使用“设置状态/持久化”里的 token（与真正请求走同一条路径），
     // 避免输入框与已保存值不一致导致的“看似填了其实没保存”问题。
@@ -96,19 +255,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (result.candidate != null) {
       final extra = storageMismatch ? '（注意：输入框与已保存值不一致，可能尚未保存成功）' : '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Token 有效：${result.candidate!.title}$extra')),
+        SnackBar(
+          content: Text(
+            'Token 有效：${result.candidate!.title} · 通道：${result.channel}$extra',
+          ),
+        ),
       );
     } else if (status == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('网络异常/超时，无法连接 Bangumi API')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '网络异常/超时：${result.channel}。'
+            '若使用本机代理，请确认其提供 HTTP(mixed) 端口（Dart 不支持 SOCKS5）。',
+          ),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             storageMismatch
                 ? 'Token 无效或无 R18 权限（HTTP $status），且输入框与已保存值不一致'
-                : 'Token 无效或无 R18 权限（HTTP $status）',
+                : 'Token 无效或无 R18 权限（HTTP $status）· 通道：${result.channel}',
           ),
         ),
       );
@@ -401,6 +569,56 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 onChanged: notifier.setTrackingPaused,
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _sectionTitle('数据管理'),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '导出当前数据库备份；加载时可选择合并到当前库或覆盖；清空只删除游戏与游玩记录，保留设置与文件夹分组。',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busyData ? null : _exportDatabase,
+                      icon: const Icon(Icons.save_alt_rounded, size: 18),
+                      label: const Text('导出数据库'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busyData ? null : _loadDatabase,
+                      icon: const Icon(Icons.restore_rounded, size: 18),
+                      label: const Text('加载数据库'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busyData ? null : _clearDatabase,
+                      icon: const Icon(
+                        Icons.delete_forever_rounded,
+                        size: 18,
+                        color: AppColors.error,
+                      ),
+                      label: const Text(
+                        '清空数据库',
+                        style: TextStyle(color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 24),

@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../features/launcher/launch_service.dart';
 import '../../features/scanner/ingestion_service.dart';
+import '../../features/scanner/library_scanner.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
@@ -20,6 +21,7 @@ import '../widgets/folder_card.dart';
 import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/game_icon.dart';
+import '../widgets/library_import_dialog.dart';
 
 enum LibraryViewMode { grid, list }
 
@@ -175,6 +177,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     setState(() => _adding = true);
     try {
       final service = IngestionService(ref.read(gameRepoProvider));
+
+      // 选到的是游戏库根目录时走批量导入，避免整库被当成一款游戏。
+      final layout = await detectLibraryLayoutInIsolate(path);
+      if (layout.isLibrary) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => LibraryImportDialog(
+            layout: layout,
+            service: service,
+            folderId: targetFolderId,
+          ),
+        );
+        return;
+      }
+
       final report = await service.ingestDroppedPaths([
         path,
       ], folderId: targetFolderId);

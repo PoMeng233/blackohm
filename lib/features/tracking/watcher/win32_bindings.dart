@@ -634,3 +634,115 @@ int registerSuspendResumeNotification(int hwnd) =>
 
 bool unregisterSuspendResumeNotification(int notify) =>
     _unregisterSuspendResumeNotification(notify) != 0;
+
+// ── 进程存活探测（Toolhelp32）─────────────────────────────────
+//
+// 前台快照只能说明「此刻谁在前台」，无法区分「游戏挂后台未关」与
+// 「游戏已退出」，因此需要枚举系统进程做存活判定。
+
+const int _th32csSnapProcess = 0x00000002;
+const int _invalidHandleValue = -1;
+
+final class ProcessEntry32W extends Struct {
+  @Uint32()
+  external int dwSize;
+
+  @Uint32()
+  external int cntUsage;
+
+  @Uint32()
+  external int th32ProcessID;
+
+  @UintPtr()
+  external int th32DefaultHeapID;
+
+  @Uint32()
+  external int th32ModuleID;
+
+  @Uint32()
+  external int cntThreads;
+
+  @Uint32()
+  external int th32ParentProcessID;
+
+  @Int32()
+  external int pcPriClassBase;
+
+  @Uint32()
+  external int dwFlags;
+
+  @Array(260)
+  external Array<Uint16> szExeFile;
+}
+
+typedef _CreateToolhelp32SnapshotNative =
+    IntPtr Function(Uint32 dwFlags, Uint32 th32ProcessID);
+typedef _CreateToolhelp32SnapshotDart =
+    int Function(int dwFlags, int th32ProcessID);
+
+typedef _Process32FirstWNative =
+    Int32 Function(IntPtr hSnapshot, Pointer<ProcessEntry32W> lppe);
+typedef _Process32FirstWDart =
+    int Function(int hSnapshot, Pointer<ProcessEntry32W> lppe);
+
+typedef _Process32NextWNative =
+    Int32 Function(IntPtr hSnapshot, Pointer<ProcessEntry32W> lppe);
+typedef _Process32NextWDart =
+    int Function(int hSnapshot, Pointer<ProcessEntry32W> lppe);
+
+final _CreateToolhelp32SnapshotDart _createToolhelp32Snapshot = _kernel32
+    .lookupFunction<
+      _CreateToolhelp32SnapshotNative,
+      _CreateToolhelp32SnapshotDart
+    >('CreateToolhelp32Snapshot');
+
+final _Process32FirstWDart _process32FirstW = _kernel32
+    .lookupFunction<_Process32FirstWNative, _Process32FirstWDart>(
+      'Process32FirstW',
+    );
+
+final _Process32NextWDart _process32NextW = _kernel32
+    .lookupFunction<_Process32NextWNative, _Process32NextWDart>(
+      'Process32NextW',
+    );
+
+/// 当前系统所有进程的可执行文件名（小写，含扩展名）。
+Set<String> runningProcessNames() {
+  final snapshot = _createToolhelp32Snapshot(_th32csSnapProcess, 0);
+  if (snapshot == 0 || snapshot == _invalidHandleValue) {
+    return const <String>{};
+  }
+  final entry = calloc<ProcessEntry32W>();
+  entry.ref.dwSize = sizeOf<ProcessEntry32W>();
+  final names = <String>{};
+  try {
+    if (_process32FirstW(snapshot, entry) == 0) return const <String>{};
+    do {
+      final name = _processEntryName(entry);
+      if (name.isNotEmpty) names.add(name.toLowerCase());
+    } while (_process32NextW(snapshot, entry) != 0);
+  } finally {
+    calloc.free(entry);
+    _closeHandle(snapshot);
+  }
+  return names;
+}
+
+String _processEntryName(Pointer<ProcessEntry32W> entry) {
+  final buffer = StringBuffer();
+  for (var i = 0; i < 260; i++) {
+    final code = entry.ref.szExeFile[i];
+    if (code == 0) break;
+    buffer.writeCharCode(code);
+  }
+  return buffer.toString();
+}
+
+/// 指定 PID 的进程是否仍存在（能取得查询句柄即视为存活）。
+bool isProcessAlive(int pid) {
+  if (pid <= 0) return false;
+  final handle = _openProcess(processQueryLimitedInformation, 0, pid);
+  if (handle == 0) return false;
+  _closeHandle(handle);
+  return true;
+}

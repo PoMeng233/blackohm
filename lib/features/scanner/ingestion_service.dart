@@ -12,11 +12,13 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
 import '../../core/path_normalizer.dart';
 import '../../data/game_repository.dart';
 import 'directory_scanner.dart';
+import 'library_scanner.dart';
 import 'pe_info.dart';
 
 /// 用于决策弹窗的完整候选元数据（isolate 回传的纯数据）。
@@ -85,6 +87,32 @@ class IngestReport {
       duplicatePaths.isNotEmpty ||
       pendingDecisions.isNotEmpty ||
       noExePaths.isNotEmpty;
+}
+
+/// 每批处理的游戏数量：控制峰值内存（图标字节用完即释放）。
+const int _libraryChunkSize = 8;
+
+/// 游戏库批量导入结果。
+class LibraryImportReport {
+  LibraryImportReport();
+
+  /// 成功录入的游戏标题。
+  final List<String> added = <String>[];
+
+  /// 已在库中而按目录跳过的游戏（目录名）。
+  final List<String> skippedExisting = <String>[];
+
+  /// 未找到可用 exe 的目录名。
+  final List<String> emptyDirectories = <String>[];
+
+  /// 因多候选而自动选主程序的游戏标题（建议用户复核）。
+  final List<String> autoChosenTitles = <String>[];
+
+  /// 是否因超出上限而截断了游戏数量。
+  bool truncated = false;
+
+  int get totalSeen =>
+      added.length + skippedExisting.length + emptyDirectories.length;
 }
 
 class IngestionService {
@@ -194,6 +222,19 @@ class IngestionService {
     IngestReport report, {
     int? folderId,
   }) async {
+    final title = await _insertReturningTitle(c, folderId: folderId);
+    if (title == null) {
+      report.duplicatePaths.add(c.path);
+      return;
+    }
+    report.added.add(title);
+  }
+
+  /// 插入单个候选并返回标题；该 exe 已在库中时返回 null。
+  Future<String?> _insertReturningTitle(
+    EnrichedCandidate c, {
+    int? folderId,
+  }) async {
     // 符号链接解析 → 长路径 → 标准化（与运行期捕获同构）。
     String real;
     try {
@@ -202,10 +243,7 @@ class IngestionService {
       real = c.path;
     }
     final normalized = normalizeExePath(real);
-    if (await _games.findByExePath(normalized) != null) {
-      report.duplicatePaths.add(c.path);
-      return;
-    }
+    if (await _games.findByExePath(normalized) != null) return null;
     final dirPath = File(c.path).parent.path;
     final fallbackTitle = dirPath.split(Platform.pathSeparator).last;
     final title = _pickTitle(c, fallbackTitle);
@@ -219,7 +257,85 @@ class IngestionService {
         folderId: Value(folderId),
       ),
     );
-    report.added.add(title);
+    return title;
+  }
+
+  /// 批量导入游戏库：逐款自动选主程序、分块富化并入库。
+  ///
+  /// 分块（每 [_libraryChunkSize] 款一次）是刻意的内存设计：整库一次性
+  /// 富化会让所有图标同时驻留内存，与「常态低占用」目标冲突。
+  Future<LibraryImportReport> importLibrary(
+    LibraryLayout layout, {
+    int? folderId,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final report = LibraryImportReport()..truncated = layout.truncated;
+    final existing = <String>{};
+    for (final g in await _games.watchAll().first) {
+      existing.add(g.exePath);
+    }
+
+    final total = layout.games.length;
+    var done = 0;
+    void advance() {
+      done++;
+      onProgress?.call(done, total);
+    }
+
+    for (
+      var start = 0;
+      start < layout.games.length;
+      start += _libraryChunkSize
+    ) {
+      final chunk = layout.games
+          .skip(start)
+          .take(_libraryChunkSize)
+          .toList(growable: false);
+
+      final pending = <(LibraryGameEntry, ExeCandidate)>[];
+      for (final entry in chunk) {
+        // 该游戏任一候选已入库 → 视为同一款游戏，整款跳过（避免重复卡片）。
+        final alreadyAdded = entry.candidates.any(
+          (c) => existing.contains(normalizeExePath(c.path)),
+        );
+        if (alreadyAdded) {
+          report.skippedExisting.add(p.basename(entry.dirPath));
+          advance();
+          continue;
+        }
+        final chosen = entry.preferred;
+        if (chosen == null) {
+          report.emptyDirectories.add(p.basename(entry.dirPath));
+          advance();
+          continue;
+        }
+        pending.add((entry, chosen));
+      }
+      if (pending.isEmpty) continue;
+
+      final enriched = await _enrich(
+        pending.map((e) => e.$2).toList(growable: false),
+        existing,
+      );
+
+      for (var i = 0; i < pending.length; i++) {
+        final (entry, chosen) = pending[i];
+        final title = await _insertReturningTitle(
+          enriched[i],
+          folderId: folderId,
+        );
+        if (title == null) {
+          report.skippedExisting.add(p.basename(entry.dirPath));
+        } else {
+          report.added.add(title);
+          if (entry.hasMultipleCandidates) {
+            report.autoChosenTitles.add(title);
+          }
+        }
+        advance();
+      }
+    }
+    return report;
   }
 
   String _pickTitle(EnrichedCandidate c, String fallback) {

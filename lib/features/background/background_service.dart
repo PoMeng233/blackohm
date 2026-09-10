@@ -10,6 +10,14 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/network/proxy_resolver.dart';
+
+/// Bangumi API 主机（代理候选按此主机判定 no_proxy）。
+const String kBangumiApiHost = 'api.bgm.tv';
+
+/// 进程内共享的代理解析器：端口探测结果复用，避免每个请求都重新探测。
+final ProxyResolver bangumiProxyResolver = ProxyResolver();
+
 class BangumiImageCandidate {
   const BangumiImageCandidate({
     required this.title,
@@ -96,40 +104,53 @@ class BangumiImageSearchService {
     )).candidate;
   }
 
-  /// 返回 HTTP 状态码与候选结果的诊断封装，便于设置页自检时给出明确提示。
-  Future<({int? statusCode, BangumiImageCandidate? candidate})>
+  /// 返回 HTTP 状态码、候选结果与实际生效通道的诊断封装，
+  /// 便于设置页自检时给出明确提示（区分“代理不通”与“Token 无效”）。
+  Future<
+    ({
+      int? statusCode,
+      BangumiImageCandidate? candidate,
+      String channel,
+      String? error,
+    })
+  >
   fetchSubjectDetailed({required int subjectId, required String token}) async {
     if (subjectId <= 0 || token.trim().isEmpty) {
-      return (statusCode: null, candidate: null);
+      return (statusCode: null, candidate: null, channel: '未发起请求', error: null);
     }
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-    try {
-      final request = await client.getUrl(
-        Uri.parse('https://api.bgm.tv/v0/subjects/$subjectId'),
-      );
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
-      final auth = token.trim();
-      request.headers.set(
-        HttpHeaders.authorizationHeader,
-        auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
-      );
-      final response = await request.close().timeout(
-        const Duration(seconds: 12),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return (statusCode: response.statusCode, candidate: null);
-      }
-      final body = await response.transform(utf8.decoder).join();
-      return (
-        statusCode: response.statusCode,
-        candidate: parseBangumiGameSubjectJson(body),
-      );
-    } catch (e) {
-      return (statusCode: null, candidate: null);
-    } finally {
-      client.close(force: true);
-    }
+    final result = await withProxyFallback<BangumiImageCandidate?>(
+      host: kBangumiApiHost,
+      resolver: bangumiProxyResolver,
+      attempt: (client) async {
+        final request = await client
+            .getUrl(
+              Uri.parse('https://$kBangumiApiHost/v0/subjects/$subjectId'),
+            )
+            .timeout(const Duration(seconds: 10));
+        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+        request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
+        final auth = token.trim();
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 12),
+        );
+        final body = await response.transform(utf8.decoder).join();
+        final ok = response.statusCode >= 200 && response.statusCode < 300;
+        return (
+          statusCode: response.statusCode,
+          value: ok ? parseBangumiGameSubjectJson(body) : null,
+        );
+      },
+    );
+    return (
+      statusCode: result.statusCode,
+      candidate: result.value,
+      channel: result.channel,
+      error: result.error,
+    );
   }
 
   Future<List<BangumiImageCandidate>> search({
@@ -137,36 +158,43 @@ class BangumiImageSearchService {
     required String token,
   }) async {
     if (query.trim().isEmpty || token.trim().isEmpty) return const [];
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-    try {
-      final request = await client.postUrl(
-        Uri.parse('https://api.bgm.tv/v0/search/subjects?limit=10&offset=0'),
-      );
-      request.headers.set(
-        HttpHeaders.contentTypeHeader,
-        'application/json; charset=utf-8',
-      );
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
-      final auth = token.trim();
-      request.headers.set(
-        HttpHeaders.authorizationHeader,
-        auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
-      );
-      request.write(jsonEncode(buildBangumiSearchPayload(query)));
-      final response = await request.close().timeout(
-        const Duration(seconds: 12),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const [];
-      }
-      final body = await response.transform(utf8.decoder).join();
-      return parseBangumiSubjectsJson(body);
-    } catch (_) {
-      return const [];
-    } finally {
-      client.close(force: true);
-    }
+    final result = await withProxyFallback<List<BangumiImageCandidate>>(
+      host: kBangumiApiHost,
+      resolver: bangumiProxyResolver,
+      attempt: (client) async {
+        final request = await client
+            .postUrl(
+              Uri.parse(
+                'https://$kBangumiApiHost/v0/search/subjects?limit=10&offset=0',
+              ),
+            )
+            .timeout(const Duration(seconds: 10));
+        request.headers.set(
+          HttpHeaders.contentTypeHeader,
+          'application/json; charset=utf-8',
+        );
+        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+        request.headers.set(HttpHeaders.userAgentHeader, 'BlackOhm/0.1.0');
+        final auth = token.trim();
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          auth.toLowerCase().startsWith('bearer ') ? auth : 'Bearer $auth',
+        );
+        request.write(jsonEncode(buildBangumiSearchPayload(query)));
+        final response = await request.close().timeout(
+          const Duration(seconds: 12),
+        );
+        final body = await response.transform(utf8.decoder).join();
+        final ok = response.statusCode >= 200 && response.statusCode < 300;
+        return (
+          statusCode: response.statusCode,
+          value: ok
+              ? parseBangumiSubjectsJson(body)
+              : const <BangumiImageCandidate>[],
+        );
+      },
+    );
+    return result.value ?? const [];
   }
 }
 
@@ -293,17 +321,32 @@ class BackgroundCacheService {
   }
 
   Future<String?> download(String url) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    final result = await withProxyFallback<List<int>>(
+      host: uri.host,
+      resolver: bangumiProxyResolver,
+      attempt: (client) async {
+        final response =
+            await (await client
+                    .getUrl(uri)
+                    .timeout(const Duration(seconds: 10)))
+                .close()
+                .timeout(const Duration(seconds: 15));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          await response.drain<void>();
+          return (statusCode: response.statusCode, value: const <int>[]);
+        }
+        final bytes = await response.fold<List<int>>([], (all, chunk) {
+          if (all.length + chunk.length <= maxBytes) all.addAll(chunk);
+          return all;
+        });
+        return (statusCode: response.statusCode, value: bytes);
+      },
+    );
+    final bytes = result.value;
+    if (bytes == null || bytes.isEmpty || !_isImage(bytes)) return null;
     try {
-      final response = await (await client.getUrl(
-        Uri.parse(url),
-      )).close().timeout(const Duration(seconds: 15));
-      if (response.statusCode < 200 || response.statusCode >= 300) return null;
-      final bytes = await response.fold<List<int>>([], (all, chunk) {
-        if (all.length + chunk.length <= maxBytes) all.addAll(chunk);
-        return all;
-      });
-      if (bytes.isEmpty || !_isImage(bytes)) return null;
       final directory = await _directory();
       final target = File(
         p.join(
@@ -315,8 +358,6 @@ class BackgroundCacheService {
       return target.path;
     } catch (_) {
       return null;
-    } finally {
-      client.close(force: true);
     }
   }
 

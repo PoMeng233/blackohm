@@ -24,6 +24,7 @@ import '../../core/database/app_database.dart';
 import '../../data/session_repository.dart';
 import 'game_attributor.dart';
 import 'input_idle.dart';
+import 'process_probe.dart';
 import 'watcher/foreground_watcher.dart' as watcher_lib;
 import 'watcher/watcher_protocol.dart';
 import 'watcher/win32_bindings.dart' show getLastInputIdleMs;
@@ -72,13 +73,20 @@ class _ActiveSession {
   final int gameId;
   int sessionId = 0; // INSERT 异步回填，0 = 尚未落库
   int accumulatedMs = 0;
+  int pid = 0; // 命中时的前台进程 PID，用于判断游戏是否已关闭
   DateTime? graceSince; // null = live
 }
 
 class TrackingEngine {
-  TrackingEngine({required this._sessions});
+  TrackingEngine({required this._sessions, GameLivenessProbe? livenessProbe})
+    : _watchdog = GraceWatchdog(
+        probe: livenessProbe ?? const WindowsProcessLivenessProbe(),
+      );
 
   final SessionRepository _sessions;
+
+  /// grace 期间的游戏存活看门狗：区分「挂后台未关」与「已关闭」。
+  final GraceWatchdog _watchdog;
 
   /// 前台归因器：精确 exe 路径命中 + EVB 等包装壳的补充归因。
   final GameAttributor _attributor = GameAttributor();
@@ -254,6 +262,8 @@ class TrackingEngine {
     final active = _active;
     if (active != null && active.gameId == gameId) {
       active.graceSince = null; // 防抖窗口内回归：合并为连续 Session
+      if (s.pid > 0) active.pid = s.pid;
+      _watchdog.disarm(); // 已回到前台，无需再做存活判定
       _liveStartedAt = DateTime.now();
       _emit();
       return;
@@ -262,18 +272,27 @@ class TrackingEngine {
       unawaited(_commitActive()); // 换游戏：先结前一个（Drift 后台串行写入）
     }
     _inputIdleGameId = null;
-    _startSession(gameId);
+    _startSession(gameId, pid: s.pid);
   }
 
   void _enterGraceIfNeeded() {
     final a = _active;
     if (a == null || a.graceSince != null) return;
-    a.graceSince = DateTime.now();
+    final now = DateTime.now();
+    a.graceSince = now;
+    // 进入暂停态后必须持续确认游戏是否仍在运行：
+    // 挂后台未关 → 保持红框；已经关闭 → 立即结束会话。
+    _watchdog.arm(
+      pid: a.pid,
+      exeFileName: _attributor.exeFileNameFor(a.gameId) ?? '',
+      now: now,
+    );
     _emit();
   }
 
-  void _startSession(int gameId) {
-    _active = _ActiveSession(gameId: gameId);
+  void _startSession(int gameId, {int pid = 0}) {
+    _watchdog.disarm();
+    _active = _ActiveSession(gameId: gameId)..pid = pid;
     _sessionStartedAt = DateTime.now();
     _liveStartedAt = _sessionStartedAt;
     _lastFlush = DateTime.now();
@@ -322,10 +341,17 @@ class TrackingEngine {
 
     // 防抖超时 → 会话终结
     final grace = a.graceSince;
-    if (grace != null &&
-        DateTime.now().difference(grace) >= kFocusGracePeriod) {
-      unawaited(_commitActive());
-      return;
+    if (grace != null) {
+      final now = DateTime.now();
+      // 游戏已关闭：立即结束会话，红框随之消失。
+      if (_watchdog.shouldCloseGame(now: now)) {
+        unawaited(_commitActive());
+        return;
+      }
+      if (now.difference(grace) >= kFocusGracePeriod) {
+        unawaited(_commitActive());
+        return;
+      }
     }
     // 周期刷盘（内存累加 → SQLite）
     if (live &&
@@ -359,6 +385,7 @@ class TrackingEngine {
   Future<void> _commitActive() async {
     final a = _active;
     _active = null;
+    _watchdog.disarm();
     _sessionStartedAt = null;
     _liveStartedAt = null;
     if (a == null) return;
