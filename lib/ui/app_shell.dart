@@ -183,6 +183,12 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   void onWindowLeaveFullScreen() => setState(() => _windowFullscreen = false);
 
   @override
+  void onWindowFocus() => ref.read(memoryTrimProvider).setFocused(true);
+
+  @override
+  void onWindowBlur() => ref.read(memoryTrimProvider).setFocused(false);
+
+  @override
   void onWindowMinimize() => _setWindowVisibility(false);
 
   @override
