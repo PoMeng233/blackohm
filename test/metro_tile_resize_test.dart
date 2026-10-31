@@ -158,6 +158,69 @@ void main() {
     await disposeUi(tester);
   });
 
+  testWidgets('右边缘以小步拖动时按拉伸处理而不是整卡拖拽', (tester) async {
+    await pumpLibrary(tester);
+    final rect = tester.getRect(gameCardOf('G1'));
+
+    // 真实鼠标每次只产生 1–2px 的位移；用 2px 步进复现整卡拖拽
+    // 识别器（1px 阈值）抢在手柄前面的情况。
+    final gesture = await tester.startGesture(
+      Offset(rect.right - 6, rect.center.dy),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var i = 0; i < 60; i++) {
+      await gesture.moveBy(const Offset(2, 0));
+      await tester.pump();
+    }
+
+    expect(find.text('宽 2×1'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      (await readGame('G1')).tileSize,
+      metroTileSizeToCode(MetroTileSize.wide),
+    );
+    expect(tester.takeException(), isNull);
+    await disposeUi(tester);
+  });
+
+  testWidgets('离开右边缘拉伸带后起手不再触发拉伸', (tester) async {
+    await pumpLibrary(tester);
+    final rect = tester.getRect(gameCardOf('G1'));
+
+    final gesture = await tester.startGesture(
+      Offset(rect.right - 24, rect.center.dy),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var i = 0; i < 60; i++) {
+      await gesture.moveBy(const Offset(2, 0));
+      await tester.pump();
+    }
+
+    expect(find.text('宽 2×1'), findsNothing);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect((await readGame('G1')).tileSize, 0);
+    expect(tester.takeException(), isNull);
+    await disposeUi(tester);
+  });
+
+  testWidgets('拉伸带内单击不会打开详情', (tester) async {
+    await pumpLibrary(tester);
+    final rect = tester.getRect(gameCardOf('G1'));
+
+    await tester.tapAt(Offset(rect.right - 6, rect.center.dy));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存修改'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await disposeUi(tester);
+  });
+
   testWidgets('右键菜单可恢复自动尺寸', (tester) async {
     await db.update(db.games).write(GamesCompanion(tileSize: const Value(2)));
 

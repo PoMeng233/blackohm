@@ -1015,6 +1015,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             tileSizes,
                             metrics.columns,
                             maxLargePerBand: metrics.columns >= 10 ? 2 : 1,
+                            // 手动拉伸过的磁贴必须按用户意图保留，不参与大砖配额。
+                            manualIndexes: {
+                              for (var i = 0; i < filtered.length; i++)
+                                if (filtered[i].tileSize != 0)
+                                  folderCards.length + i,
+                            },
                           );
                           return MetroTileGrid(
                             metrics: metrics,

@@ -3,6 +3,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,6 +57,10 @@ class GameCard extends ConsumerStatefulWidget {
 }
 
 enum _ResizeEdge { right, bottom, corner }
+
+/// 磁贴右/下边缘的拉伸带。落在这里的起手一律算拉伸，
+/// 不再触发整卡拖入文件夹（否则两种手势会抢同一个起手点）。
+const double _resizeBand = 16;
 
 class _GameCardState extends ConsumerState<GameCard> {
   bool _hovering = false;
@@ -139,6 +144,50 @@ class _GameCardState extends ConsumerState<GameCard> {
     MetroTileSize.tall => '竖 1×2',
     MetroTileSize.large => '大 2×2',
   };
+
+  /// 拉伸手柄的命中区。
+  ///
+  /// 用 [ImmediateMultiDragGestureRecognizer] 而不是 GestureDetector 的 pan：
+  /// 整卡拖拽的 [Draggable] 用的是同一个识别器（鼠标 1px 阈值），pan 需要
+  /// 2px 才认领，慢速拖动时会被整卡拖走。手柄在命中链更深处先入 arena，
+  /// 阈值一致时稳定先赢，边界内的起手才会固定是拉伸。
+  Widget _resizeHandle({
+    required _ResizeEdge edge,
+    required MouseCursor cursor,
+  }) {
+    return MouseRegion(
+      cursor: cursor,
+      onEnter: (_) => setState(() => _hoverEdge = edge),
+      onExit: (_) => setState(() {
+        if (_hoverEdge == edge) _hoverEdge = null;
+      }),
+      child: RawGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        gestures: <Type, GestureRecognizerFactory>{
+          // 吸收边缘上的单击，避免落到整卡 onTap 上打开详情。
+          TapGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                TapGestureRecognizer.new,
+                (recognizer) => recognizer.onTap = () {},
+              ),
+          ImmediateMultiDragGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<
+                ImmediateMultiDragGestureRecognizer
+              >(
+                () => ImmediateMultiDragGestureRecognizer(debugOwner: this),
+                (recognizer) => recognizer.onStart = (_) {
+                  _beginResize();
+                  return _ResizeDrag(
+                    onUpdate: (details) => _updateResize(details, edge),
+                    onDone: _endResize,
+                  );
+                },
+              ),
+        },
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -526,8 +575,9 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 ),
                               ),
                               Positioned(
-                                right: padding - 4,
-                                bottom: padding - 4,
+                                // 让开右/下 16px 拉伸带，悬停按钮不被手柄吞掉。
+                                right: padding + 4,
+                                bottom: padding + 4,
                                 child: AnimatedSlide(
                                   offset: showActions
                                       ? Offset.zero
@@ -592,7 +642,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 Positioned(
                                   top: 8,
                                   right: 0,
-                                  bottom: 12,
+                                  bottom: _resizeBand,
                                   child: IgnorePointer(
                                     child: AnimatedOpacity(
                                       opacity: showRightEdge ? 1 : 0,
@@ -612,7 +662,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 ),
                                 Positioned(
                                   left: 8,
-                                  right: 12,
+                                  right: _resizeBand,
                                   bottom: 0,
                                   child: IgnorePointer(
                                     child: AnimatedOpacity(
@@ -634,86 +684,33 @@ class _GameCardState extends ConsumerState<GameCard> {
                                 Positioned(
                                   top: 0,
                                   right: 0,
-                                  bottom: 10,
-                                  width: 8,
-                                  child: MouseRegion(
-                                    cursor: SystemMouseCursors.resizeLeftRight,
-                                    onEnter: (_) => setState(
-                                      () => _hoverEdge = _ResizeEdge.right,
-                                    ),
-                                    onExit: (_) => setState(() {
-                                      if (_hoverEdge == _ResizeEdge.right) {
-                                        _hoverEdge = null;
-                                      }
-                                    }),
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () {},
-                                      onPanStart: (_) => _beginResize(),
-                                      onPanUpdate: (details) => _updateResize(
-                                        details,
-                                        _ResizeEdge.right,
-                                      ),
-                                      onPanEnd: (_) => _endResize(),
-                                      onPanCancel: _endResize,
-                                    ),
+                                  bottom: _resizeBand,
+                                  width: _resizeBand,
+                                  child: _resizeHandle(
+                                    edge: _ResizeEdge.right,
+                                    cursor:
+                                        SystemMouseCursors.resizeLeftRight,
                                   ),
                                 ),
                                 Positioned(
                                   left: 0,
-                                  right: 10,
+                                  right: _resizeBand,
                                   bottom: 0,
-                                  height: 8,
-                                  child: MouseRegion(
+                                  height: _resizeBand,
+                                  child: _resizeHandle(
+                                    edge: _ResizeEdge.bottom,
                                     cursor: SystemMouseCursors.resizeUpDown,
-                                    onEnter: (_) => setState(
-                                      () => _hoverEdge = _ResizeEdge.bottom,
-                                    ),
-                                    onExit: (_) => setState(() {
-                                      if (_hoverEdge == _ResizeEdge.bottom) {
-                                        _hoverEdge = null;
-                                      }
-                                    }),
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () {},
-                                      onPanStart: (_) => _beginResize(),
-                                      onPanUpdate: (details) => _updateResize(
-                                        details,
-                                        _ResizeEdge.bottom,
-                                      ),
-                                      onPanEnd: (_) => _endResize(),
-                                      onPanCancel: _endResize,
-                                    ),
                                   ),
                                 ),
                                 Positioned(
                                   right: 0,
                                   bottom: 0,
-                                  width: 10,
-                                  height: 10,
-                                  child: MouseRegion(
+                                  width: _resizeBand,
+                                  height: _resizeBand,
+                                  child: _resizeHandle(
+                                    edge: _ResizeEdge.corner,
                                     cursor: SystemMouseCursors
                                         .resizeUpLeftDownRight,
-                                    onEnter: (_) => setState(
-                                      () => _hoverEdge = _ResizeEdge.corner,
-                                    ),
-                                    onExit: (_) => setState(() {
-                                      if (_hoverEdge == _ResizeEdge.corner) {
-                                        _hoverEdge = null;
-                                      }
-                                    }),
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () {},
-                                      onPanStart: (_) => _beginResize(),
-                                      onPanUpdate: (details) => _updateResize(
-                                        details,
-                                        _ResizeEdge.corner,
-                                      ),
-                                      onPanEnd: (_) => _endResize(),
-                                      onPanCancel: _endResize,
-                                    ),
                                   ),
                                 ),
                               ],
@@ -930,6 +927,22 @@ class _MicroBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ResizeDrag extends Drag {
+  _ResizeDrag({required this.onUpdate, required this.onDone});
+
+  final ValueChanged<DragUpdateDetails> onUpdate;
+  final VoidCallback onDone;
+
+  @override
+  void update(DragUpdateDetails details) => onUpdate(details);
+
+  @override
+  void end(DragEndDetails details) => onDone();
+
+  @override
+  void cancel() => onDone();
 }
 
 class _ResizeGhostLabel extends StatelessWidget {

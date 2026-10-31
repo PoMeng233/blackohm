@@ -212,16 +212,21 @@ class MetroTileBand {
 /// 1×1 与 2×1 只占一行，2×2 / 1×2 占满两行；装不下时开启新 band，
 /// 保证高磁贴不会被拆到两个 band 里，也便于 SliverList 懒构建。
 ///
-/// 每个 band 最多放 [maxLargePerBand] 张大砖，避免两三张大砖吃掉整屏；
+/// 每个 band 最多放 [maxLargePerBand] 张**自动分配**的大砖，避免两三张英雄砖
+/// 吃掉整屏；[manualIndexes] 里手动拉大的磁贴是明确意图，不受配额限制，
+/// 否则两张手动大砖会各自独占一条 band，把后面整行留空。
+///
 /// 队首放不下但 band 仍有空隙时，会向后寻找能完整填入空隙的磁贴先行放置，
 /// 否则一张大砖就会在行尾留下整列空白（n 张大砖后必然出现）。
 List<MetroTileBand> packMetroBands(
   List<MetroTileSize> sizes,
   int columns, {
   int maxLargePerBand = 1,
+  Set<int> manualIndexes = const {},
 }) {
   final bandColumns = math.max(2, columns);
   final largeCap = math.max(1, maxLargePerBand);
+  bool isManual(int index) => manualIndexes.contains(index);
   final bands = <MetroTileBand>[];
   var placements = <MetroTilePlacement>[];
   var occupied = List.generate(2, (_) => List.filled(bandColumns, false));
@@ -254,8 +259,12 @@ List<MetroTileBand> packMetroBands(
     return true;
   }
 
-  (int, int)? findSpot(MetroTileSize size, {int maxRows = 2}) {
-    if (size == MetroTileSize.large && largeInBand >= largeCap) return null;
+  (int, int)? findSpot(int index, MetroTileSize size, {int maxRows = 2}) {
+    if (size == MetroTileSize.large &&
+        !isManual(index) &&
+        largeInBand >= largeCap) {
+      return null;
+    }
     for (var row = 0; row <= maxRows - size.rowSpan; row++) {
       for (var column = 0; column <= bandColumns - size.columnSpan; column++) {
         if (fits(row, column, size)) return (row, column);
@@ -274,12 +283,12 @@ List<MetroTileBand> packMetroBands(
       MetroTilePlacement(index: index, column: column, row: row, size: size),
     );
     rowCount = math.max(rowCount, row + size.rowSpan);
-    if (size == MetroTileSize.large) largeInBand++;
+    if (size == MetroTileSize.large && !isManual(index)) largeInBand++;
   }
 
   while (pending.isNotEmpty) {
     final head = pending.first;
-    final spot = findSpot(head.size);
+    final spot = findSpot(head.index, head.size);
     if (spot != null) {
       place(head.index, spot.$1, spot.$2, head.size);
       pending.removeAt(0);
@@ -289,7 +298,11 @@ List<MetroTileBand> packMetroBands(
     for (var j = 1; j < pending.length; j++) {
       // 只回填 band 已占用的行：不再额外撑起新的一行，
       // 否则排在前面的“英雄”大砖会被后排小砖不断挤到下一屏。
-      final candidate = findSpot(pending[j].size, maxRows: rowCount);
+      final candidate = findSpot(
+        pending[j].index,
+        pending[j].size,
+        maxRows: rowCount,
+      );
       if (candidate == null) continue;
       place(pending[j].index, candidate.$1, candidate.$2, pending[j].size);
       pending.removeAt(j);

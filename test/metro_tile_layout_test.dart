@@ -288,6 +288,53 @@ void main() {
       expect(bands.last.tiles.single.index, 1);
     });
 
+    test('手动拉大的磁贴不受每 band 大砖配额限制', () {
+      final bands = packMetroBands(
+        const [MetroTileSize.large, MetroTileSize.large],
+        4,
+        maxLargePerBand: 1,
+        manualIndexes: const {0, 1},
+      );
+      expect(bands, hasLength(1));
+      expect(bands.single.rowCount, 2);
+      expect(bands.single.tiles.map((tile) => tile.index), [0, 1]);
+    });
+
+    test('屎文件夹：手动大砖与自动大砖并排，不再各占一条 band', () {
+      // 按累计时长降序：手动大砖在 0 / 4，自动大砖落在 2。
+      final bands = packMetroBands(
+        const [
+          MetroTileSize.large,
+          MetroTileSize.small,
+          MetroTileSize.large,
+          MetroTileSize.small,
+          MetroTileSize.large,
+          MetroTileSize.small,
+        ],
+        4,
+        maxLargePerBand: 1,
+        manualIndexes: const {0, 4},
+      );
+      expect(bands, hasLength(2));
+      expect(bands.first.tiles, hasLength(4));
+      expect(
+        bands.last.tiles.map((tile) => tile.index).toList(),
+        [2, 4],
+        reason: '剩下的自动大砖应与手动大砖同 band 并排',
+      );
+      // 第一 band 只允许在尾列留一个空洞，2×2 大砖不能把整行掏空。
+      final occupied = List.generate(2, (_) => List.filled(4, false));
+      for (final tile in bands.first.tiles) {
+        for (var r = tile.row; r < tile.row + tile.size.rowSpan; r++) {
+          for (var c = tile.column; c < tile.column + tile.size.columnSpan; c++) {
+            occupied[r][c] = true;
+          }
+        }
+      }
+      final holes = occupied.expand((row) => row).where((cell) => !cell).length;
+      expect(holes, lessThanOrEqualTo(1));
+    });
+
     test('10 列宽屏允许同一 band 放两张以内的大砖', () {
       final bands = packMetroBands(
         const [MetroTileSize.large, MetroTileSize.large],
