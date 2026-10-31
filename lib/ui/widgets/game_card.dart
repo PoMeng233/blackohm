@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../features/background/background_service.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
 import 'active_record_frame.dart';
+import 'cover_file_image.dart';
 import 'game_icon.dart';
 
 class GameCard extends ConsumerStatefulWidget {
@@ -63,6 +65,7 @@ class _GameCardState extends ConsumerState<GameCard> {
     final detailPath = widget.game.detailBackgroundPath;
     final hasBlurBackground =
         widget.game.backgroundBlurAmount > 0 &&
+        isCurrentDetailBackground(detailPath) &&
         detailPath != null &&
         File(detailPath).existsSync();
     return MouseRegion(
@@ -112,9 +115,8 @@ class _GameCardState extends ConsumerState<GameCard> {
                   children: [
                     if (hasBackground)
                       Positioned.fill(
-                        child: Image.file(
-                          backgroundFile,
-                          fit: BoxFit.cover,
+                        child: CoverFileImage(
+                          file: backgroundFile,
                           cacheWidth: 360,
                           cacheHeight: 380,
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -127,9 +129,8 @@ class _GameCardState extends ConsumerState<GameCard> {
                             0.0,
                             1.0,
                           ),
-                          child: Image.file(
-                            File(detailPath),
-                            fit: BoxFit.cover,
+                          child: CoverFileImage(
+                            file: File(detailPath),
                             cacheWidth: 360,
                             cacheHeight: 380,
                             filterQuality: FilterQuality.low,

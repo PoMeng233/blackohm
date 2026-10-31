@@ -225,10 +225,23 @@ class ProxyRequestResult<T> {
   bool get isSuccess => statusCode != null;
 }
 
+/// 该状态码是否代表「这条通道不可用」，应继续尝试下一个候选。
+///
+/// 典型场景：共享代理出口 IP 触发 GitHub API 限流返回 403，此时直连往往可用，
+/// 不能把 403 当成最终答复；而 401/404 是服务端对请求本身的权威答复，
+/// 换通道也没有意义。
+bool isChannelFailureStatus(int statusCode) {
+  if (statusCode == 403 || statusCode == 407 || statusCode == 408) return true;
+  if (statusCode == 429) return true;
+  return statusCode >= 500;
+}
+
 /// 依次尝试代理候选执行 [attempt]。
 ///
 /// [attempt] 抛出异常（连接失败/超时等）视为该通道不可用，自动切换下一个；
-/// 只要拿到 HTTP 响应就立即返回，不再尝试后续通道。
+/// 返回的状态码若属于 [isChannelFailureStatus]（限流 / 代理鉴权失败 / 服务端错误），
+/// 同样切换下一个候选；只有拿到权威答复（2xx、401、404 等）才立即返回。
+/// 所有候选都失败时返回最后一次观察到的结果，便于诊断与提示。
 Future<ProxyRequestResult<T>> withProxyFallback<T>({
   required String host,
   required Future<({int statusCode, T value})> Function(HttpClient client)
@@ -237,22 +250,26 @@ Future<ProxyRequestResult<T>> withProxyFallback<T>({
 }) async {
   final candidates = await (resolver ?? ProxyResolver()).candidatesFor(host);
   String? lastError;
+  ProxyRequestResult<T>? lastChannelFailure;
   for (final candidate in candidates) {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8)
       ..findProxy = (uri) => candidate.findProxy;
     try {
       final result = await attempt(client);
-      return ProxyRequestResult<T>(
+      final outcome = ProxyRequestResult<T>(
         value: result.value,
         statusCode: result.statusCode,
         channel: candidate.label,
       );
+      if (!isChannelFailureStatus(result.statusCode)) return outcome;
+      lastChannelFailure = outcome;
     } catch (e) {
       lastError = e.toString();
     } finally {
       client.close(force: true);
     }
   }
+  if (lastChannelFailure != null) return lastChannelFailure;
   return ProxyRequestResult<T>(channel: '所有通道均不可用', error: lastError);
 }

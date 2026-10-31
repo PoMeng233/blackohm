@@ -69,6 +69,28 @@ class GameRepository {
     _db.games,
   )..where((g) => g.id.equals(id))).write(patch).then((rows) => rows > 0);
 
+  /// 异步派生图只写回仍引用同一原图和旧派生图的游戏，避免覆盖切图/清除操作。
+  Future<bool> updateDetailBackgroundIfUnchanged({
+    required int gameId,
+    required String sourcePath,
+    required String? previousDetailPath,
+    required String detailPath,
+  }) async {
+    final query = _db.update(_db.games)
+      ..where(
+        (game) =>
+            game.id.equals(gameId) &
+            game.backgroundPath.equals(sourcePath) &
+            (previousDetailPath == null
+                ? game.detailBackgroundPath.isNull()
+                : game.detailBackgroundPath.equals(previousDetailPath)),
+      );
+    final rows = await query.write(
+      GamesCompanion(detailBackgroundPath: Value(detailPath)),
+    );
+    return rows > 0;
+  }
+
   Future<int> delete(int id) =>
       (_db.delete(_db.games)..where((g) => g.id.equals(id))).go();
 

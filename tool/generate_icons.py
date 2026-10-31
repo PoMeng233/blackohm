@@ -127,20 +127,21 @@ def write_ico(target: Path, sizes: tuple[int, ...], browser: str) -> None:
 def build_preview(browser: str) -> None:
     """浅色/深色双背景 + 大图与各档实际尺寸，便于目检托盘可读性。"""
     sizes = (64, 48, 32, 24, 16)
-    width, height = 340, 300
+    width, height = 480, 355
     sheet = Image.new("RGBA", (width, height), (245, 245, 245, 255))
     for y in range(height):
         for x in range(width // 2, width):
             sheet.putpixel((x, y), (32, 32, 32, 255))
-    sheet.alpha_composite(render_png(MARK_SVG, 256, browser), ((width - 256) // 2, 4))
-    x = 24
-    for size in sizes:
-        sheet.alpha_composite(render_png(MARK_SVG, size, browser), (x, 236))
-        x += size + 14
-    x = width // 2 + 24
-    for size in sizes:
-        sheet.alpha_composite(render_png(MARK_SVG, size, browser), (x, 236))
-        x += size + 14
+    sheet.alpha_composite(render_png(MARK_SVG, 256, browser), ((width - 256) // 2, 6))
+    row_y = 276
+    x = 4
+    for size in sizes:  # 浅色底
+        sheet.alpha_composite(render_png(MARK_SVG, size, browser), (x, row_y))
+        x += size + 12
+    x = width // 2 + 4
+    for size in sizes:  # 深色底
+        sheet.alpha_composite(render_png(MARK_SVG, size, browser), (x, row_y))
+        x += size + 12
     sheet.save(PREVIEW_PNG)
 
 

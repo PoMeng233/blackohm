@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:blackohm/core/database/app_database.dart';
 import 'package:blackohm/core/path_normalizer.dart';
 import 'package:blackohm/features/scanner/pe_info.dart';
 import 'package:blackohm/features/scanner/png_encoder.dart';
@@ -59,6 +60,55 @@ void main() {
         expect(scheme.primary, isNotNull);
         expect(scheme.primaryContainer, isNotNull);
       }
+    });
+  });
+
+  group('设置弹窗未保存检测', () {
+    Game baseGame() => Game(
+      id: 1,
+      title: 'Game',
+      exePath: r'c:\games\game.exe',
+      dirPath: r'c:\games',
+      backgroundBlurAmount: 0,
+      launchArgs: '',
+      useLocaleEmulator: true,
+      leProfile: 'Japan',
+      createdAt: DateTime(2026),
+      totalPlaySeconds: 100,
+      favorite: false,
+      folderId: 2,
+      launchCount: 3,
+    );
+
+    bool dirty({
+      String title = 'Game',
+      String launchArgs = '',
+      String leProfile = 'Japan',
+      bool useLocaleEmulator = true,
+      int? folderId = 2,
+      String exePath = r'c:\games\game.exe',
+    }) => hasUnsavedGameEdits(
+      game: baseGame(),
+      title: title,
+      launchArgs: launchArgs,
+      leProfile: leProfile,
+      useLocaleEmulator: useLocaleEmulator,
+      folderId: folderId,
+      exePath: exePath,
+    );
+
+    test('相同草稿（忽略首尾空格）视为未修改', () {
+      expect(dirty(title: '  Game  '), isFalse);
+      expect(dirty(launchArgs: '  '), isFalse);
+    });
+
+    test('任一字段变化都视为有未保存修改', () {
+      expect(dirty(title: 'Other'), isTrue);
+      expect(dirty(launchArgs: '-windowed'), isTrue);
+      expect(dirty(leProfile: 'zh-CN'), isTrue);
+      expect(dirty(useLocaleEmulator: false), isTrue);
+      expect(dirty(folderId: null), isTrue);
+      expect(dirty(exePath: r'c:\games\patch.exe'), isTrue);
     });
   });
 

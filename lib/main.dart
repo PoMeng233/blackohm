@@ -13,6 +13,7 @@ Future<void> main() async {
 
   await windowManager.ensureInitialized();
   await windowManager.setAsFrameless();
+  await windowManager.setResizable(true);
 
   final windowOptions = const WindowOptions(
     size: Size(1080, 720),
@@ -30,6 +31,7 @@ Future<void> main() async {
   // 读取 startHidden 设置决定首屏展示/隐藏，并等待设置加载完成
   final container = ProviderContainer();
   await container.read(settingsProvider.notifier).loadFuture;
+  await container.read(libraryNavigationProvider.notifier).loadFuture;
   final startHidden = container.read(settingsProvider).startHidden;
 
   // 内存治理：收紧图像缓存上限（默认 1000 张 / 100 MiB，远超本应用需求），

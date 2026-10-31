@@ -6,11 +6,14 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/database/app_database.dart';
 import '../../core/network/proxy_resolver.dart';
+import '../../data/game_repository.dart';
 
 /// Bangumi API 主机（代理候选按此主机判定 no_proxy）。
 const String kBangumiApiHost = 'api.bgm.tv';
@@ -254,6 +257,12 @@ BangumiImageCandidate? parseBangumiSubject(Map value) {
   );
 }
 
+const _detailBackgroundSuffix = '.detail-blur-v2.png';
+
+/// v2 保留原图比例，旧的固定比例裁切缓存需要重新生成。
+bool isCurrentDetailBackground(String? path) =>
+    path != null && path.endsWith(_detailBackgroundSuffix);
+
 /// 供后台 isolate 生成详情派生图；非法图片返回 null，不影响原背景使用。
 List<int>? createDetailBackgroundBytesForTest(List<int> sourceBytes) =>
     _createDetailBackgroundBytes(sourceBytes);
@@ -263,29 +272,22 @@ List<int>? _createDetailBackgroundBytes(List<int> sourceBytes) {
     final decoded = img.decodeImage(Uint8List.fromList(sourceBytes));
     if (decoded == null) return null;
 
-    const targetWidth = 960;
-    const targetHeight = 900;
-    final targetRatio = targetWidth / targetHeight;
-    final sourceRatio = decoded.width / decoded.height;
-    final cropWidth = sourceRatio > targetRatio
-        ? (decoded.height * targetRatio).round()
-        : decoded.width;
-    final cropHeight = sourceRatio > targetRatio
-        ? decoded.height
-        : (decoded.width / targetRatio).round();
-    final cropped = img.copyCrop(
-      decoded,
-      x: (decoded.width - cropWidth) ~/ 2,
-      y: (decoded.height - cropHeight) ~/ 2,
-      width: cropWidth,
-      height: cropHeight,
-    );
-    final resized = img.copyResize(
-      cropped,
-      width: targetWidth,
-      height: targetHeight,
-      interpolation: img.Interpolation.average,
-    );
+    final oriented = img.bakeOrientation(decoded);
+    const maxDimension = 960;
+    final longestSide = oriented.width > oriented.height
+        ? oriented.width
+        : oriented.height;
+    final scale = longestSide > maxDimension ? maxDimension / longestSide : 1.0;
+    final width = (oriented.width * scale).round().clamp(1, maxDimension);
+    final height = (oriented.height * scale).round().clamp(1, maxDimension);
+    final resized = scale == 1.0
+        ? oriented
+        : img.copyResize(
+            oriented,
+            width: width,
+            height: height,
+            interpolation: img.Interpolation.average,
+          );
     final blurred = img.gaussianBlur(resized, radius: 18);
     return img.encodePng(blurred, level: 6);
   } catch (_) {
@@ -294,11 +296,21 @@ List<int>? _createDetailBackgroundBytes(List<int> sourceBytes) {
 }
 
 class BackgroundCacheService {
+  BackgroundCacheService({Directory? directory}) : _cacheDirectory = directory;
+
   static const maxBytes = 12 * 1024 * 1024;
 
+  final Directory? _cacheDirectory;
+
+  /// 弹窗与后台迁移使用不同实例，但同一目标文件只能同时生成一次。
+  static final _detailBackgroundsInFlight = <String, Future<String?>>{};
+
   Future<Directory> _directory() async {
-    final base = await getApplicationSupportDirectory();
-    final directory = Directory(p.join(base.path, 'backgrounds'));
+    final directory =
+        _cacheDirectory ??
+        Directory(
+          p.join((await getApplicationSupportDirectory()).path, 'backgrounds'),
+        );
     await directory.create(recursive: true);
     return directory;
   }
@@ -364,28 +376,86 @@ class BackgroundCacheService {
   /// 以小尺寸派生图实现详情页模糊背景，避免打开弹窗时运行实时滤镜。
   Future<String?> createDetailBackground(String? sourcePath) async {
     if (sourcePath == null || sourcePath.isEmpty) return null;
-    final source = File(sourcePath);
-    if (!await source.exists()) return null;
-    final directory = await _directory();
-    final target = File(
-      p.join(
-        directory.path,
-        '${p.basenameWithoutExtension(sourcePath)}.detail-blur-v1.png',
-      ),
-    );
-    if (await target.exists() && await target.length() > 0) return target.path;
-
     try {
-      final sourceBytes = await source.readAsBytes();
-      final output = await Isolate.run(
-        () => _createDetailBackgroundBytes(sourceBytes),
+      final directory = await _directory();
+      final digest = md5.convert(utf8.encode(sourcePath)).toString();
+      final target = File(
+        p.join(directory.path, '$digest$_detailBackgroundSuffix'),
       );
-      if (output == null) return null;
-      await target.writeAsBytes(output, flush: true);
-      return target.path;
+      final key = p.normalize(p.absolute(target.path));
+      final pending = _detailBackgroundsInFlight[key];
+      if (pending != null) return pending;
+
+      final generation = _generateDetailBackground(sourcePath, target);
+      _detailBackgroundsInFlight[key] = generation;
+      try {
+        return await generation;
+      } finally {
+        if (identical(_detailBackgroundsInFlight[key], generation)) {
+          _detailBackgroundsInFlight.remove(key);
+        }
+      }
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _generateDetailBackground(
+    String sourcePath,
+    File target,
+  ) async {
+    File? temporary;
+    try {
+      final source = File(sourcePath);
+      if (!await source.exists()) return null;
+      if (await target.exists() && await target.length() > 0) {
+        return target.path;
+      }
+      final sourceBytes = await source.readAsBytes();
+      final bytes = await Isolate.run(
+        () => _createDetailBackgroundBytes(sourceBytes),
+      );
+      if (bytes == null) return null;
+      // 先写临时文件再原子改名，其他读取者不会观察到半张 PNG。
+      temporary = File('${target.path}.tmp');
+      await temporary.writeAsBytes(bytes, flush: true);
+      await temporary.rename(target.path);
+      return target.path;
+    } catch (_) {
+      // 丢失、损坏或不可写的缓存不影响原图展示，也不写回失败路径。
+      return null;
+    } finally {
+      if (temporary != null) {
+        try {
+          if (await temporary.exists()) await temporary.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// 旧缓存保留供其他游戏引用；生成成功后按原图/旧派生图快照条件写回。
+  Future<bool> migrateGameDetailBackground({
+    required Game game,
+    required GameRepository repository,
+    bool Function()? shouldContinue,
+  }) async {
+    final sourcePath = game.backgroundPath;
+    if (sourcePath == null ||
+        sourcePath.isEmpty ||
+        isCurrentDetailBackground(game.detailBackgroundPath) ||
+        (shouldContinue != null && !shouldContinue())) {
+      return false;
+    }
+    final detailPath = await createDetailBackground(sourcePath);
+    if (detailPath == null || (shouldContinue != null && !shouldContinue())) {
+      return false;
+    }
+    return repository.updateDetailBackgroundIfUnchanged(
+      gameId: game.id,
+      sourcePath: sourcePath,
+      previousDetailPath: game.detailBackgroundPath,
+      detailPath: detailPath,
+    );
   }
 
   Future<void> delete(String? path) async {

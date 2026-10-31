@@ -57,6 +57,28 @@ void main() {
     });
   });
 
+  group('isChannelFailureStatus', () {
+    test('限流与代理鉴权失败视为通道不可用', () {
+      expect(isChannelFailureStatus(403), isTrue);
+      expect(isChannelFailureStatus(407), isTrue);
+      expect(isChannelFailureStatus(429), isTrue);
+      expect(isChannelFailureStatus(408), isTrue);
+    });
+
+    test('服务端错误视为通道不可用', () {
+      expect(isChannelFailureStatus(500), isTrue);
+      expect(isChannelFailureStatus(502), isTrue);
+      expect(isChannelFailureStatus(503), isTrue);
+    });
+
+    test('成功与权威答复不触发切换通道', () {
+      expect(isChannelFailureStatus(200), isFalse);
+      expect(isChannelFailureStatus(204), isFalse);
+      expect(isChannelFailureStatus(401), isFalse);
+      expect(isChannelFailureStatus(404), isFalse);
+    });
+  });
+
   group('buildProxyCandidates', () {
     test('顺序为系统代理 → 环境变量 → 本机端口 → 直连', () {
       final candidates = buildProxyCandidates(

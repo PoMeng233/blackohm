@@ -16,6 +16,7 @@ import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
 import '../widgets/active_record_frame.dart';
+import '../widgets/cover_file_image.dart';
 import '../widgets/exe_decision_dialog.dart';
 import '../widgets/folder_card.dart';
 import '../widgets/game_card.dart';
@@ -87,8 +88,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   String _searchQuery = '';
   bool _adding = false;
 
-  /// 当前选中的文件夹 ID：null 表示“全部”；-1 表示“未分类”；>= 0 为具体文件夹 ID
-  int? _selectedFolderId;
+  int? get _selectedFolderId => ref.read(libraryNavigationProvider);
 
   @override
   void initState() {
@@ -127,9 +127,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   void _selectFolder(int? folderId) {
-    setState(() => _selectedFolderId = folderId);
-    final target = folderId != null && folderId > 0 ? folderId : null;
-    ref.read(currentBrowsingFolderIdProvider.notifier).state = target;
+    ref.read(libraryNavigationProvider.notifier).select(folderId);
   }
 
   Future<void> _addGame() async {
@@ -430,7 +428,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     if (confirmed != true) return;
     await ref.read(folderRepoProvider).delete(folder.id);
     if (_selectedFolderId == folder.id && mounted) {
-      setState(() => _selectedFolderId = null);
+      _selectFolder(null);
     }
   }
 
@@ -630,6 +628,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(libraryNavigationProvider);
     final gamesAsync = ref.watch(gameListProvider);
     final foldersAsync = ref.watch(folderListProvider);
     final activeState = ref.watch(
@@ -986,7 +985,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ),
                       child: Stack(
                         children: [
-                          // 封面图按比例裁切填满时长条，仅按宽度约束解码以保持长宽比；
+                          // 封面图按比例裁切填满时长条，以宽高上限等比解码；
                           // 图片上先叠一层均匀压暗降低亮度（保证前景文字可读），
                           // 右缘用动态 stops 的渐变覆盖：全不透明点精确落在
                           // 位图边缘，冗余段保持终色，彻底消除硬切缝。
@@ -1014,10 +1013,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                         bottom: 0,
                                         width: imageW,
                                         child: ClipRect(
-                                          child: Image.file(
-                                            backgroundFile,
+                                          child: CoverFileImage(
+                                            file: backgroundFile,
                                             cacheWidth: cacheWidth,
-                                            fit: BoxFit.cover,
+                                            cacheHeight:
+                                                (constraints.maxHeight * dpr)
+                                                    .round()
+                                                    .clamp(1, 960),
                                             gaplessPlayback: true,
                                             filterQuality: FilterQuality.low,
                                             errorBuilder: (_, _, _) =>

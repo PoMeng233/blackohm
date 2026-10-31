@@ -1,8 +1,13 @@
 import 'package:blackohm/core/database/app_database.dart';
+import 'package:blackohm/data/folder_repository.dart';
+import 'package:blackohm/data/settings_repository.dart';
+import 'package:blackohm/features/library/library_navigation_controller.dart';
 import 'package:blackohm/features/tracking/tracking_engine.dart';
 import 'package:blackohm/providers.dart';
 import 'package:blackohm/ui/pages/library_page.dart';
 import 'package:blackohm/ui/theme.dart';
+import 'package:blackohm/ui/widgets/folder_card.dart';
+import 'package:blackohm/ui/widgets/game_card.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +19,8 @@ void main() {
 
   late List<Game> games;
   late List<GameFolder> folders;
+  late _MemorySettingsRepository settings;
+  late _SnapshotFolderRepository folderRepository;
 
   setUp(() async {
     // 只在 setup 阶段使用内存数据库构造快照；测试 UI 不再订阅 Drift watch，
@@ -46,16 +53,24 @@ void main() {
         );
     games = await db.select(db.games).get();
     folders = await db.select(db.gameFolders).get();
+    settings = _MemorySettingsRepository(db);
+    folderRepository = _SnapshotFolderRepository(db, folders);
     await db.close();
   });
 
-  Future<void> pumpLibrary(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1080, 720);
+  Future<ProviderContainer> pumpLibrary(
+    WidgetTester tester, {
+    ValueNotifier<bool>? libraryVisible,
+    Size viewportSize = const Size(1080, 720),
+  }) async {
+    tester.view.physicalSize = viewportSize;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          settingsRepoProvider.overrideWithValue(settings),
+          folderRepoProvider.overrideWithValue(folderRepository),
           gameListProvider.overrideWith((ref) => Stream.value(games)),
           folderListProvider.overrideWith((ref) => Stream.value(folders)),
           gameIconProvider.overrideWith((ref, id) => Future.value(null)),
@@ -71,12 +86,148 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildDarkTheme(),
-          home: const Scaffold(body: SizedBox.expand(child: LibraryPage())),
+          home: Scaffold(
+            body: libraryVisible == null
+                ? const SizedBox.expand(child: LibraryPage())
+                : ValueListenableBuilder<bool>(
+                    valueListenable: libraryVisible,
+                    builder: (_, visible, _) => visible
+                        ? const SizedBox.expand(child: LibraryPage())
+                        : const Center(child: Text('Other page')),
+                  ),
+          ),
         ),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    await container.read(libraryNavigationProvider.notifier).loadFuture;
+    await tester.pump();
+    return container;
+  }
+
+  for (final saved in ['all', 'uncategorized', 'folder']) {
+    testWidgets('库页恢复 $saved 选择并按对应文件夹过滤游戏', (tester) async {
+      final folderId = folders.firstWhere((folder) => folder.name == '在玩').id;
+      final selection = switch (saved) {
+        'all' => null,
+        'uncategorized' => -1,
+        _ => folderId,
+      };
+      await settings.set(
+        SettingsKeys.librarySelectedFolder,
+        LibraryNavigationController.encode(selection),
+      );
+      final container = await pumpLibrary(tester);
+
+      expect(container.read(libraryNavigationProvider), selection);
+      expect(
+        find.text('Active Game'),
+        selection == -1 ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.text('Idle Game'),
+        selection == folderId ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byType(FolderCard),
+        selection == null ? findsWidgets : findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      await container.read(libraryNavigationProvider.notifier).flush();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('离开库页后重新挂载仍显示上次选中的文件夹', (tester) async {
+    final visible = ValueNotifier(true);
+    addTearDown(visible.dispose);
+    final container = await pumpLibrary(tester, libraryVisible: visible);
+    final folderId = folders.firstWhere((folder) => folder.name == '在玩').id;
+
+    await tester.tap(find.text('在玩').first);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Active Game'), findsOneWidget);
+    expect(find.text('Idle Game'), findsNothing);
+
+    // AppShell 负责标记当前页面；这里模拟它的页面切换并卸载库页。
+    container.read(libraryPageActiveProvider.notifier).state = false;
+    visible.value = false;
+    await tester.pump();
+    expect(find.byType(LibraryPage), findsNothing);
+    expect(container.read(currentBrowsingFolderIdProvider), isNull);
+    expect(container.read(libraryNavigationProvider), folderId);
+
+    container.read(libraryPageActiveProvider.notifier).state = true;
+    visible.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Active Game'), findsOneWidget);
+    expect(find.text('Idle Game'), findsNothing);
+    expect(container.read(currentBrowsingFolderIdProvider), folderId);
+    expect(tester.takeException(), isNull);
+
+    await container.read(libraryNavigationProvider.notifier).flush();
+    expect(
+      await settings.get(SettingsKeys.librarySelectedFolder),
+      'folder:$folderId',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  for (final pageWidth in [728.0, 1008.0, 1368.0]) {
+    testWidgets('库页宽度 $pageWidth 下卡片高度一致且切换无布局异常', (tester) async {
+      // 窗口宽度扣除 AppShell 的 72px 导航栏，包含最小 800px 窗口。
+      final container = await pumpLibrary(
+        tester,
+        viewportSize: Size(pageWidth, 720),
+      );
+      final grid = tester.widget<GridView>(find.byType(GridView));
+      final delegate =
+          grid.gridDelegate as SliverGridDelegateWithMaxCrossAxisExtent;
+      expect(delegate.mainAxisExtent, 190);
+      expect(delegate.maxCrossAxisExtent, 180);
+      final gridWidth = tester.getSize(find.byType(GridView)).width;
+      final availableWidth =
+          gridWidth - grid.padding!.resolve(TextDirection.ltr).horizontal;
+      final columnCount =
+          (availableWidth /
+                  (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
+              .ceil();
+      // Flutter 的列数计算包含间距，但只扣除列间间距；卡片实际宽度
+      // 可以略大于 maxCrossAxisExtent（1008px 库页下为 182.4px）。
+      final expectedCardWidth =
+          (availableWidth - delegate.crossAxisSpacing * (columnCount - 1)) /
+          columnCount;
+      expect(find.byType(FolderCard), findsWidgets);
+      expect(find.byType(GameCard), findsNWidgets(games.length));
+      for (final element in [
+        ...find.byType(FolderCard).evaluate(),
+        ...find.byType(GameCard).evaluate(),
+      ]) {
+        final size = tester.getSize(find.byWidget(element.widget));
+        expect(size.height, 190);
+        expect(size.width, closeTo(expectedCardWidth, 0.001));
+      }
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('在玩').first);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(FolderCard), findsNothing);
+      expect(find.byType(GameCard), findsOneWidget);
+      expect(tester.getSize(find.byType(GameCard)).height, 190);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byIcon(Icons.view_list));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Active Game'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await container.read(libraryNavigationProvider.notifier).flush();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 
   testWidgets('活跃计时中切换文件夹不抛异常（网格视图）', (tester) async {
@@ -144,4 +295,31 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+}
+
+class _SnapshotFolderRepository extends FolderRepository {
+  _SnapshotFolderRepository(super.db, this.folders);
+
+  final List<GameFolder> folders;
+
+  @override
+  Future<List<GameFolder>> getAll() async => folders;
+
+  @override
+  Stream<List<GameFolder>> watchAll() => Stream.value(folders);
+}
+
+class _MemorySettingsRepository extends SettingsRepository {
+  _MemorySettingsRepository(super.db);
+
+  final Map<String, String> values = {};
+
+  @override
+  Future<String> get(String key, {String defaultValue = ''}) async =>
+      values[key] ?? defaultValue;
+
+  @override
+  Future<void> set(String key, String value) async {
+    values[key] = value;
+  }
 }

@@ -19,6 +19,7 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   image: ^4.5.4
+  crypto: ^3.0.7
 
   # ── Windows 系统级交互（手写 FFI 绑定，ffi 提供 NativeCallable）──
   ffi: ^2.1.4

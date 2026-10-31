@@ -13,8 +13,10 @@ import '../../core/app_constants.dart';
 import '../../data/settings_repository.dart';
 import '../../features/background/background_service.dart';
 import '../../features/data/backup_service.dart';
+import '../../features/update/update_checker.dart';
 import '../../providers.dart';
 import '../theme.dart';
+import '../widgets/cover_file_image.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -466,9 +468,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   child:
                       settings.shellBackgroundPath.isNotEmpty &&
                           File(settings.shellBackgroundPath).existsSync()
-                      ? Image.file(
-                          File(settings.shellBackgroundPath),
-                          fit: BoxFit.cover,
+                      ? CoverFileImage(
+                          file: File(settings.shellBackgroundPath),
                           cacheWidth: 232,
                           cacheHeight: 116,
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -640,30 +641,77 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // 版本号随构建自动更新（读取 pubspec version）。
+                    // 版本号随构建自动更新（读取 exe 的版本资源 / pubspec version）。
                     FutureBuilder<PackageInfo>(
                       future: PackageInfo.fromPlatform(),
                       builder: (context, snapshot) {
                         final v = snapshot.data;
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withAlpha(26),
-                            borderRadius: BorderRadius.circular(99),
-                          ),
-                          child: Text(
-                            v == null ? '…' : 'v${v.version}',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                        final latest = ref
+                            .watch(latestReleaseVersionProvider)
+                            .valueOrNull;
+                        final hasNewer =
+                            v != null &&
+                            latest != null &&
+                            isNewerVersion(current: v.version, latest: latest);
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withAlpha(26),
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                              child: Text(
+                                v == null ? '…' : 'v${v.version}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          ),
+                            // 启动时检测到更高版本时的轻量提示（不弹窗）。
+                            if (hasNewer) ...[
+                              const SizedBox(width: 8),
+                              Tooltip(
+                                message: '发现新版本 v$latest，点击前往 Releases',
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(99),
+                                  onTap: () => launchUrl(
+                                    Uri.parse(kGitHubReleasesUrl),
+                                    mode: LaunchMode.externalApplication,
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.error.withAlpha(30),
+                                      borderRadius: BorderRadius.circular(99),
+                                      border: Border.all(
+                                        color: AppColors.error.withAlpha(120),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      '有新版',
+                                      style: TextStyle(
+                                        color: AppColors.error,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         );
                       },
                     ),

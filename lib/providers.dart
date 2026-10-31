@@ -2,8 +2,8 @@
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app_constants.dart';
@@ -14,8 +14,10 @@ import 'data/session_repository.dart';
 import 'data/settings_repository.dart';
 import 'features/background/background_service.dart';
 import 'features/bangumi/bangumi_enrichment_service.dart';
+import 'features/library/library_navigation_controller.dart';
 import 'features/memory/memory_trim_service.dart';
 import 'features/tracking/tracking_engine.dart';
+import 'features/update/update_checker.dart';
 import 'ui/theme.dart';
 
 // ── 数据层 ────────────────────────────────────────────────────
@@ -80,7 +82,21 @@ final windowVisibleProvider = StateProvider<bool>((ref) => true);
 
 /// 当前正在浏览的具体文件夹 ID（null 表示全部游戏/未分类/非库页）。
 /// 用于外部拖拽或“添加游戏”时，把新入库的游戏直接加入当前文件夹。
-final currentBrowsingFolderIdProvider = StateProvider<int?>((ref) => null);
+final libraryNavigationProvider =
+    StateNotifierProvider<LibraryNavigationController, int?>(
+      (ref) => LibraryNavigationController(
+        ref.watch(settingsRepoProvider),
+        ref.watch(folderRepoProvider),
+      ),
+    );
+
+final libraryPageActiveProvider = StateProvider<bool>((ref) => true);
+
+final currentBrowsingFolderIdProvider = Provider<int?>((ref) {
+  if (!ref.watch(libraryPageActiveProvider)) return null;
+  final selection = ref.watch(libraryNavigationProvider);
+  return selection != null && selection > 0 ? selection : null;
+});
 
 // ── 游戏图标按需加载 ──────────────────────────────────────────
 /// 列表查询不再携带 iconPng blob；卡片可见时按 gameId 惰性取一次，
@@ -279,3 +295,47 @@ final bangumiEnrichmentProvider = Provider<BangumiEnrichmentCoordinator>((ref) {
   ref.onDispose(coordinator.dispose);
   return coordinator;
 });
+
+// ── 旧背景缓存迁移 ────────────────────────────────────────────
+final backgroundCacheMigrationProvider = Provider<void>((ref) {
+  final repository = ref.watch(gameRepoProvider);
+  final cache = BackgroundCacheService();
+  final attempted = <(int, String?, String?)>{};
+  var disposed = false;
+  Future<void> pending = Future.value();
+  ref.onDispose(() => disposed = true);
+  ref.listen(gameListProvider, (_, next) {
+    for (final game in next.value ?? const <Game>[]) {
+      if (game.backgroundBlurAmount <= 0) continue;
+      if (game.backgroundPath == null || game.backgroundPath!.isEmpty) continue;
+      if (isCurrentDetailBackground(game.detailBackgroundPath)) continue;
+      if (!attempted.add((
+        game.id,
+        game.backgroundPath,
+        game.detailBackgroundPath,
+      ))) {
+        continue;
+      }
+      // 串行迁移避免旧库启动时同时解码多张原图；失败保持原数据。
+      pending = pending.then((_) async {
+        if (disposed) return;
+        try {
+          await cache.migrateGameDetailBackground(
+            game: game,
+            repository: repository,
+            shouldContinue: () => !disposed,
+          );
+        } catch (error) {
+          debugPrint('无法迁移游戏背景缓存：$error');
+        }
+      });
+    }
+  }, fireImmediately: true);
+});
+
+// ── 版本更新检测 ──────────────────────────────────────────────
+/// 每次启动查询一次 GitHub 最新 Release；失败静默返回 null。
+/// 结果只用于在设置页「关于」的版本号旁提示，不弹窗、不打断使用。
+final latestReleaseVersionProvider = FutureProvider<String?>(
+  (ref) => fetchLatestReleaseVersion(),
+);

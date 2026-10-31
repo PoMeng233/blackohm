@@ -32,6 +32,9 @@ abstract final class SettingsKeys {
   /// 主界面背景图的应用缓存路径。
   static const shellBackgroundPath = 'ui.shellBackgroundPath';
 
+  /// 游戏库上次浏览选择（`all` / `uncategorized` / `folder:<id>`）。
+  static const librarySelectedFolder = 'ui.librarySelectedFolder';
+
   /// Material 3 配色方案（ThemePalette 枚举名）。
   static const themePalette = 'ui.themePalette';
 }

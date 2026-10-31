@@ -22,6 +22,8 @@ import 'pages/settings_page.dart';
 import 'theme.dart';
 import 'widgets/exe_decision_dialog.dart';
 import 'widgets/library_import_dialog.dart';
+import 'widgets/cover_file_image.dart';
+import 'widgets/window_resize_frame.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -33,6 +35,8 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   int _navIndex = 0;
   bool _uiVisible = true;
+  bool _windowMaximized = false;
+  bool _windowFullscreen = false;
   final Set<int> _visitedPages = {0};
   TrayService? _tray;
   ProviderSubscription<AsyncValue<List<Game>>>? _recentGamesSubscription;
@@ -48,8 +52,12 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     ref.read(windowVisibleProvider.notifier).state = _uiVisible;
     ref.read(trackingEngineProvider).setUiVisible(_uiVisible);
     windowManager.addListener(this);
+    unawaited(_syncWindowMaximized());
     // 触发 Bangumi 自动富化监听（新增游戏后异步拉评分/封面）。
     ref.read(bangumiEnrichmentProvider);
+    ref.read(backgroundCacheMigrationProvider);
+    // 每次启动静默检测一次新版本（失败不影响使用，仅用于「关于」提示）。
+    ref.read(latestReleaseVersionProvider);
     _initTray();
   }
 
@@ -73,6 +81,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
         await windowManager.focus();
       },
       onQuit: () async {
+        await ref.read(libraryNavigationProvider.notifier).flush();
         await ref.read(trackingEngineProvider).stop();
         exit(0);
       },
@@ -151,6 +160,28 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     if (visible) unawaited(_showPendingInputIdleNotice());
   }
 
+  Future<void> _syncWindowMaximized() async {
+    final maximized = await windowManager.isMaximized();
+    final fullscreen = await windowManager.isFullScreen();
+    if (!mounted) return;
+    setState(() {
+      _windowMaximized = maximized;
+      _windowFullscreen = fullscreen;
+    });
+  }
+
+  @override
+  void onWindowMaximize() => setState(() => _windowMaximized = true);
+
+  @override
+  void onWindowUnmaximize() => setState(() => _windowMaximized = false);
+
+  @override
+  void onWindowEnterFullScreen() => setState(() => _windowFullscreen = true);
+
+  @override
+  void onWindowLeaveFullScreen() => setState(() => _windowFullscreen = false);
+
   @override
   void onWindowMinimize() => _setWindowVisibility(false);
 
@@ -166,6 +197,7 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
       _setWindowVisibility(false);
       ref.read(memoryTrimProvider).notifyWindowHidden();
     } else {
+      await ref.read(libraryNavigationProvider.notifier).flush();
       await ref.read(trackingEngineProvider).stop();
       exit(0);
     }
@@ -266,150 +298,152 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     final hasShellBackground =
         shellBackgroundPath.isNotEmpty &&
         File(shellBackgroundPath).existsSync();
-    return DropOverlay(
-      onDropped: _onDropped,
-      child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasShellBackground)
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final dpr = MediaQuery.devicePixelRatioOf(context);
-                  return Image.file(
-                    File(shellBackgroundPath),
-                    fit: BoxFit.cover,
-                    cacheWidth: (constraints.maxWidth * dpr).round().clamp(
-                      1,
-                      1600,
+    return WindowResizeFrame(
+      enabled: !_windowMaximized && !_windowFullscreen,
+      child: DropOverlay(
+        onDropped: _onDropped,
+        child: Scaffold(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (hasShellBackground)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final dpr = MediaQuery.devicePixelRatioOf(context);
+                    return CoverFileImage(
+                      file: File(shellBackgroundPath),
+                      cacheWidth: (constraints.maxWidth * dpr).round().clamp(
+                        1,
+                        1600,
+                      ),
+                      cacheHeight: (constraints.maxHeight * dpr).round().clamp(
+                        1,
+                        1200,
+                      ),
+                      filterQuality: FilterQuality.low,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+              if (hasShellBackground)
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xC90D0F12), Color(0xF20D0F12)],
                     ),
-                    cacheHeight: (constraints.maxHeight * dpr).round().clamp(
-                      1,
-                      1200,
-                    ),
-                    filterQuality: FilterQuality.low,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                  );
-                },
-              ),
-            if (hasShellBackground)
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xC90D0F12), Color(0xF20D0F12)],
                   ),
                 ),
-              ),
-            Column(
-              children: [
-                _titleBar(),
-                Expanded(
-                  child: Row(
-                    children: [
-                      // 现代极简侧边栏
-                      Container(
-                        width: 72,
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          border: Border(
-                            right: BorderSide(color: AppColors.border),
+              Column(
+                children: [
+                  _titleBar(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        // 现代极简侧边栏
+                        Container(
+                          width: 72,
+                          decoration: const BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border(
+                              right: BorderSide(color: AppColors.border),
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 16),
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceActive,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(9),
-                                child: Image.asset(
-                                  'assets/icon_source.png',
-                                  cacheWidth: 64,
-                                  cacheHeight: 64,
-                                  fit: BoxFit.cover,
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 16),
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceActive,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(9),
+                                  child: Image.asset(
+                                    'assets/icon_source.png',
+                                    cacheWidth: 64,
+                                    cacheHeight: 64,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            _navButton(
-                              icon: Icons.grid_view_rounded,
-                              label: '游戏库',
-                              index: 0,
-                            ),
-                            const SizedBox(height: 8),
-                            _navButton(
-                              icon: Icons.query_stats_rounded,
-                              label: '时长',
-                              index: 1,
-                            ),
-                            const SizedBox(height: 8),
-                            _navButton(
-                              icon: Icons.tune_rounded,
-                              label: '设置',
-                              index: 2,
-                            ),
-                            const Spacer(),
-                            Consumer(
-                              builder: (_, ref, _) {
-                                final state = ref
-                                    .watch(trackingStateProvider)
-                                    .valueOrNull;
-                                final active = state?.isActive ?? false;
-                                final inputIdle =
-                                    state?.phase == TrackingPhase.inputIdle;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 16),
-                                  child: Tooltip(
-                                    message: inputIdle
-                                        ? '无操作已暂停计时'
-                                        : (active ? '正在前台计时' : '后台守护中'),
-                                    child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: inputIdle
-                                            ? AppColors.textSecondary
-                                            : (active
-                                                  ? context.interactiveColor
-                                                  : AppColors.textMuted),
-                                        shape: BoxShape.circle,
-                                        boxShadow: null,
+                              const SizedBox(height: 24),
+                              _navButton(
+                                icon: Icons.grid_view_rounded,
+                                label: '游戏库',
+                                index: 0,
+                              ),
+                              const SizedBox(height: 8),
+                              _navButton(
+                                icon: Icons.query_stats_rounded,
+                                label: '时长',
+                                index: 1,
+                              ),
+                              const SizedBox(height: 8),
+                              _navButton(
+                                icon: Icons.tune_rounded,
+                                label: '设置',
+                                index: 2,
+                              ),
+                              const Spacer(),
+                              Consumer(
+                                builder: (_, ref, _) {
+                                  final state = ref
+                                      .watch(trackingStateProvider)
+                                      .valueOrNull;
+                                  final active = state?.isActive ?? false;
+                                  final inputIdle =
+                                      state?.phase == TrackingPhase.inputIdle;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Tooltip(
+                                      message: inputIdle
+                                          ? '无操作已暂停计时'
+                                          : (active ? '正在前台计时' : '后台守护中'),
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: inputIdle
+                                              ? AppColors.textSecondary
+                                              : (active
+                                                    ? context.interactiveColor
+                                                    : AppColors.textMuted),
+                                          shape: BoxShape.circle,
+                                          boxShadow: null,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: IndexedStack(
-                          index: _navIndex,
-                          children: [
-                            const LibraryPage(),
-                            _visitedPages.contains(1)
-                                ? const InsightsPage()
-                                : const SizedBox.shrink(),
-                            _visitedPages.contains(2)
-                                ? const SettingsPage()
-                                : const SizedBox.shrink(),
-                          ],
+                        Expanded(
+                          child: IndexedStack(
+                            index: _navIndex,
+                            children: [
+                              const LibraryPage(),
+                              _visitedPages.contains(1)
+                                  ? const InsightsPage()
+                                  : const SizedBox.shrink(),
+                              _visitedPages.contains(2)
+                                  ? const SettingsPage()
+                                  : const SizedBox.shrink(),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -489,10 +523,13 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
     final selected = _navIndex == index;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: () => setState(() {
-        _visitedPages.add(index);
-        _navIndex = index;
-      }),
+      onTap: () {
+        ref.read(libraryPageActiveProvider.notifier).state = index == 0;
+        setState(() {
+          _visitedPages.add(index);
+          _navIndex = index;
+        });
+      },
       child: Container(
         width: 56,
         padding: const EdgeInsets.symmetric(vertical: 8),
