@@ -164,6 +164,99 @@ void main() {
     final service = BackupService(dbB, databaseFile: () async => pathB);
     expect(await service.validateBackup(junk.path), isFalse);
   });
+
+  test('导出后可完整还原别名', () async {
+    final gameId = await _insertGame(
+      dbA,
+      title: '宝石心',
+      exePath: r'g:\galgame\jewelry\jeweha.exe',
+    );
+    await dbA
+        .into(dbA.gameAliases)
+        .insert(
+          GameAliasesCompanion.insert(
+            gameId: gameId,
+            exePath: r'g:\galgame\jewelry\patch\patch.exe',
+            dirPath: r'g:\galgame\jewelry\patch',
+            label: const Value('汉化补丁'),
+          ),
+        );
+
+    await BackupService(
+      dbA,
+      databaseFile: () async => pathA,
+    ).exportTo(backupPath);
+    final result = await BackupService(
+      dbB,
+      databaseFile: () async => pathB,
+    ).loadFrom(backupPath, mode: BackupLoadMode.merge);
+
+    expect(result.importedGames, 1);
+    expect(result.importedAliases, 1);
+    final aliases = await dbB.select(dbB.gameAliases).get();
+    expect(aliases, hasLength(1));
+    expect(aliases.single.exePath, r'g:\galgame\jewelry\patch\patch.exe');
+    expect(aliases.single.label, '汉化补丁');
+  });
+
+  test('合并时别名冲突则跳过该条别名', () async {
+    final gameId = await _insertGame(
+      dbA,
+      title: '宝石心',
+      exePath: r'g:\galgame\jewelry\jeweha.exe',
+    );
+    await dbA
+        .into(dbA.gameAliases)
+        .insert(
+          GameAliasesCompanion.insert(
+            gameId: gameId,
+            exePath: r'g:\galgame\jewelry\patch.exe',
+            dirPath: r'g:\galgame\jewelry',
+          ),
+        );
+    await _insertGame(
+      dbB,
+      title: '占用者',
+      exePath: r'g:\galgame\jewelry\patch.exe',
+    );
+
+    await BackupService(
+      dbA,
+      databaseFile: () async => pathA,
+    ).exportTo(backupPath);
+    final result = await BackupService(
+      dbB,
+      databaseFile: () async => pathB,
+    ).loadFrom(backupPath, mode: BackupLoadMode.merge);
+
+    expect(result.importedGames, 1);
+    expect(result.skippedAliases, 1);
+    expect(await dbB.select(dbB.gameAliases).get(), isEmpty);
+  });
+
+  test('旧备份没有别名表时仍可加载', () async {
+    await _insertGame(
+      dbA,
+      title: '宝石心',
+      exePath: r'g:\galgame\jewelry\jeweha.exe',
+    );
+    await BackupService(
+      dbA,
+      databaseFile: () async => pathA,
+    ).exportTo(backupPath);
+
+    final backupDb = AppDatabase.forTesting(NativeDatabase(File(backupPath)));
+    await backupDb.customStatement('DROP TABLE game_aliases');
+    await backupDb.close();
+
+    final result = await BackupService(
+      dbB,
+      databaseFile: () async => pathB,
+    ).loadFrom(backupPath, mode: BackupLoadMode.merge);
+
+    expect(result.importedGames, 1);
+    expect(result.importedAliases, 0);
+  });
 }
 
 Future<int> _insertGame(

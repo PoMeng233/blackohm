@@ -36,6 +36,8 @@ class BackupLoadResult {
   int importedSessions = 0;
   int skippedSessions = 0;
   int importedFolders = 0;
+  int importedAliases = 0;
+  int skippedAliases = 0;
 
   bool get isEmpty => importedGames == 0 && skippedGames == 0;
 }
@@ -107,7 +109,8 @@ class BackupService {
     try {
       await _db.transaction(() async {
         if (mode == BackupLoadMode.overwrite) {
-          // 级联删除：会话随游戏一并清除。
+          // 级联删除：会话与别名随游戏一并清除。
+          await _db.delete(_db.gameAliases).go();
           await _db.delete(_db.playSessions).go();
           await _db.delete(_db.games).go();
           await _db.delete(_db.gameFolders).go();
@@ -120,6 +123,7 @@ class BackupService {
           backupFolderNames: folderNames,
         );
         await _importSessions(result, gameIds);
+        await _importAliases(result, gameIds);
       });
     } finally {
       await _detach();
@@ -193,6 +197,9 @@ class BackupService {
       for (final g in await _db.select(_db.games).get()) {
         existingExe.add(g.exePath);
       }
+      for (final a in await _db.select(_db.gameAliases).get()) {
+        existingExe.add(a.exePath);
+      }
     }
     final folderIdByName = <String, int>{
       for (final f in await _db.select(_db.gameFolders).get()) f.name: f.id,
@@ -256,6 +263,66 @@ class BackupService {
       result.importedGames++;
     }
     return idMap;
+  }
+
+  /// 导入备份中的别名；被整款跳过的游戏不导入其别名。
+  Future<void> _importAliases(
+    BackupLoadResult result,
+    Map<int, int> gameIds,
+  ) async {
+    if (!await _hasTable('game_aliases')) return;
+
+    final tracked = <String>{};
+    for (final row in await (_db.selectOnly(
+      _db.games,
+    )..addColumns([_db.games.exePath])).get()) {
+      final path = row.read(_db.games.exePath);
+      if (path != null) tracked.add(path);
+    }
+    for (final row in await (_db.selectOnly(
+      _db.gameAliases,
+    )..addColumns([_db.gameAliases.exePath])).get()) {
+      final path = row.read(_db.gameAliases.exePath);
+      if (path != null) tracked.add(path);
+    }
+
+    final rows = await _db
+        .customSelect('SELECT * FROM $_attachName.game_aliases')
+        .get();
+    for (final row in rows) {
+      final data = row.data;
+      final backupGameId = data['game_id'];
+      final exePath = _read(DriftSqlType.string, data['exe_path']);
+      if (backupGameId is! int || exePath == null || exePath.isEmpty) continue;
+
+      final newGameId = gameIds[backupGameId];
+      if (newGameId == null) continue; // 整款被跳过
+      if (tracked.contains(exePath)) {
+        result.skippedAliases++;
+        continue;
+      }
+
+      final dirPath = _read(DriftSqlType.string, data['dir_path']) ?? '';
+      final label = _read(DriftSqlType.string, data['label']);
+      final createdAt = _read(DriftSqlType.dateTime, data['created_at']);
+
+      await _db
+          .into(_db.gameAliases)
+          .insert(
+            GameAliasesCompanion.insert(
+              gameId: newGameId,
+              exePath: exePath,
+              dirPath: dirPath,
+              label: Value(label),
+              createdAt: createdAt == null
+                  ? const Value.absent()
+                  : Value(createdAt),
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+      tracked.add(exePath);
+      result.importedAliases++;
+    }
   }
 
   Future<void> _importSessions(

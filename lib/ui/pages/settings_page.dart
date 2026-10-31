@@ -163,7 +163,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _notify(
         '加载完成：新增 ${result.importedGames} 款、'
         '跳过已存在 ${result.skippedGames} 款、'
-        '导入记录 ${result.importedSessions} 条',
+        '导入记录 ${result.importedSessions} 条、'
+        '导入别名 ${result.importedAliases} 条',
       );
     } catch (e) {
       _notify('加载失败：$e', error: true);
