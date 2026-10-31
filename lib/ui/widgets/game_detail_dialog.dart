@@ -17,6 +17,7 @@ import '../../features/tracking/session_merge.dart';
 import '../../providers.dart';
 import '../theme.dart';
 import 'cover_file_image.dart';
+import 'game_exe_tracking_section.dart';
 import 'game_icon.dart';
 
 /// 返回当前启动 exe 所在目录；路径无效时让文件选择器使用系统默认目录。
@@ -488,12 +489,19 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
       real = await File(selectedPath).resolveSymbolicLinks();
     } catch (_) {}
     final normalized = normalizeExePath(real);
-    final existing = await ref.read(gameRepoProvider).findByExePath(normalized);
+    final ownerId = await ref.read(aliasRepoProvider).ownerGameIdOf(normalized);
     if (!mounted) return;
-    if (existing != null && existing.id != widget.game.id) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('该 exe 已被其他游戏占用，不能切换')));
+    if (ownerId != null && ownerId != widget.game.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该 exe 已被其他游戏跟踪，不能切换')),
+      );
+      return;
+    }
+    if (ownerId == widget.game.id &&
+        normalized != normalizeExePath(widget.game.exePath)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该 exe 已在当前卡片的跟踪列表中，请先移除别名')),
+      );
       return;
     }
     setState(() {
@@ -893,6 +901,24 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
                                         ),
                                       ),
                                   ],
+                                  const SizedBox(height: 10),
+                                  GameExeTrackingSection(
+                                    game: widget.game,
+                                    onMerged: (source) {
+                                      final messenger = ScaffoldMessenger.of(
+                                        context,
+                                      );
+                                      Navigator.of(context).pop();
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '已将《${source.title}》合并到'
+                                            '《${widget.game.title}》',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   const SizedBox(height: 6),
                                   const Text(
                                     '游玩历史记录',
