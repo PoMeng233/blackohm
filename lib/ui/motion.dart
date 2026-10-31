@@ -11,14 +11,13 @@ abstract final class AppMotion {
   static const curve = Cubic(0.22, 1, 0.36, 1);
 
   /// 入场：淡入 + 上移 + 微缩放。
-  static const appear = Duration(milliseconds: 600);
+  ///
+  /// 整墙统一播放、不按序号错峰：错峰会让首屏后半段磁贴延后近一秒才亮，
+  /// 切换文件夹时又混着"不重播"的旧磁贴，看起来就是闪烁。
+  static const appear = Duration(milliseconds: 320);
 
-  /// 入场错峰：按序号递增，最多叠加 7 步。
-  static const staggerStep = Duration(milliseconds: 40);
-  static const staggerMax = 7;
-
-  static Duration staggerFor(int index) =>
-      staggerStep * (index % (staggerMax + 1));
+  /// 封面位图解码完成后的淡入，抹掉"先空后硬切"的闪烁。
+  static const coverFade = Duration(milliseconds: 180);
 
   /// 悬停抬升、描边、操作条等即时反馈。
   static const hover = Duration(milliseconds: 220);

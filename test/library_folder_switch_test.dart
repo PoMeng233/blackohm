@@ -8,6 +8,7 @@ import 'package:blackohm/ui/pages/library_page.dart';
 import 'package:blackohm/ui/theme.dart';
 import 'package:blackohm/ui/widgets/folder_card.dart';
 import 'package:blackohm/ui/widgets/game_card.dart';
+import 'package:blackohm/ui/widgets/metro_tile_appear.dart';
 import 'package:blackohm/ui/widgets/metro_tile_grid.dart';
 import 'package:blackohm/ui/widgets/metro_tile_layout.dart';
 import 'package:drift/drift.dart' show Value;
@@ -267,6 +268,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Active Game'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('切换文件夹时整墙统一重播淡入', (tester) async {
+    await pumpLibrary(tester);
+    // 首屏入场先跑完，避免两段动画叠在一起。
+    await tester.pump(const Duration(milliseconds: 400));
+
+    List<double> tileOpacities() => tester
+        .widgetList<Opacity>(
+          find.descendant(
+            of: find.byType(MetroTileAppear),
+            matching: find.byType(Opacity),
+          ),
+        )
+        .map((widget) => widget.opacity)
+        .toList();
+
+    expect(tileOpacities().every((value) => value == 1), isTrue);
+
+    await tester.tap(find.text('在玩').first);
+    await tester.pump();
+    final start = tileOpacities();
+    expect(start, isNotEmpty);
+    expect(start.every((value) => value == 0), isTrue);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tileOpacities().every((value) => value == 1), isTrue);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

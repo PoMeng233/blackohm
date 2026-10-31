@@ -10,11 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../features/launcher/launch_service.dart';
+import '../../features/library/library_navigation_controller.dart';
 import '../../features/scanner/ingestion_service.dart';
 import '../../features/scanner/library_scanner.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
-import '../motion.dart';
 import '../theme.dart';
 import '../widgets/cover_file_image.dart';
 import '../widgets/exe_decision_dialog.dart';
@@ -91,16 +91,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   String _searchQuery = '';
   bool _adding = false;
 
-  /// 本次页面会话内已播过出现动画的磁贴；滚动复用时不再重播。
+  /// 当前视图范围内已播过出现动画的磁贴；滚动复用时不再重播。
   final Set<String> _appearedTiles = <String>{};
+
+  /// 当前视图范围（文件夹 / 搜索 / 排序 / 收藏过滤），由 [build] 每次写入。
+  /// 变化时清空 [_appearedTiles] 并让整墙统一重播一次淡入，
+  /// 同一范围（含再次进入的旧文件夹）也保持一致。
+  String _scopeToken = '';
 
   int? get _selectedFolderId => ref.read(libraryNavigationProvider);
 
-  /// 首次构建某张磁贴时播放一次出现动画；同会话内复建不再重播。
-  /// 按墙内序号错峰，避免整屏磁贴同时亮起。
-  Widget _withAppear(String key, int index, Widget child) => MetroTileAppear(
+  /// 首次在本视图范围内构建某张磁贴时播放出现动画。
+  /// 每张磁贴都挂当前 scope：范围切换时持久复用的磁贴也能统一重播。
+  Widget _withAppear(String key, Widget child) => MetroTileAppear(
     animate: _appearedTiles.add(key),
-    delay: AppMotion.staggerFor(index),
+    scope: _scopeToken,
     child: child,
   );
 
@@ -650,7 +655,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(libraryNavigationProvider);
+    final selectedFolderId = ref.watch(libraryNavigationProvider);
+    final nextScope =
+        '${LibraryNavigationController.encode(selectedFolderId)}|'
+        '$_searchQuery|${_sort.name}|$_onlyFavorites';
+    if (nextScope != _scopeToken) {
+      _scopeToken = nextScope;
+      _appearedTiles.clear();
+    }
     final gamesAsync = ref.watch(gameListProvider);
     final foldersAsync = ref.watch(folderListProvider);
     final activeState = ref.watch(
@@ -1015,7 +1027,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                     .length;
                                 return _withAppear(
                                   'folder:${folder.id}',
-                                  index,
                                   FolderCard(
                                     folder: folder,
                                     gameCount: gameCount,
@@ -1072,7 +1083,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               );
                               return _withAppear(
                                 'game:${game.id}',
-                                index,
                                 Draggable<Game>(
                                   data: game,
                                   feedback: Material(
