@@ -149,29 +149,29 @@ class AppDatabase extends _$AppDatabase {
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
-        await m.addColumn(games, games.backgroundPath);
+        await _addColumnIfMissing(m, games, games.backgroundPath);
       }
       if (from < 3) {
         await m.createTable(gameFolders);
-        await m.addColumn(games, games.folderId);
+        await _addColumnIfMissing(m, games, games.folderId);
         await _seedDefaultFolders();
       }
       if (from < 4) {
-        await m.addColumn(games, games.detailBackgroundPath);
+        await _addColumnIfMissing(m, games, games.detailBackgroundPath);
       }
       if (from < 5) {
-        await m.addColumn(gameFolders, gameFolders.showOnHome);
+        await _addColumnIfMissing(m, gameFolders, gameFolders.showOnHome);
       }
       if (from < 6) {
-        await m.addColumn(games, games.backgroundBlurAmount);
+        await _addColumnIfMissing(m, games, games.backgroundBlurAmount);
       }
       if (from < 7) {
-        await m.addColumn(games, games.launchCount);
-        await m.addColumn(games, games.bangumiSubjectId);
-        await m.addColumn(games, games.bangumiScore);
+        await _addColumnIfMissing(m, games, games.launchCount);
+        await _addColumnIfMissing(m, games, games.bangumiSubjectId);
+        await _addColumnIfMissing(m, games, games.bangumiScore);
       }
       if (from < 8) {
-        await m.addColumn(games, games.tileSize);
+        await _addColumnIfMissing(m, games, games.tileSize);
       }
     },
     beforeOpen: (details) async {
@@ -180,6 +180,20 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys=ON;');
     },
   );
+
+  /// 迁移可能被进程中断（列已写入、版本号未更新），再次升级时
+  /// ADD COLUMN 会撞上已存在的列并让整个库打不开。逐列探测后补齐。
+  Future<void> _addColumnIfMissing(
+    Migrator m,
+    TableInfo table,
+    GeneratedColumn column,
+  ) async {
+    final info = await customSelect(
+      'PRAGMA table_info(${table.actualTableName})',
+    ).get();
+    if (info.any((row) => row.data['name'] == column.name)) return;
+    await m.addColumn(table, column);
+  }
 
   Future<void> _seedDefaultFolders() async {
     final count = await (select(gameFolders)..limit(1)).get();
