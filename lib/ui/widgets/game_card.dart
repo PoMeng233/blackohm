@@ -11,6 +11,7 @@ import '../../core/database/app_database.dart';
 import '../../features/background/background_service.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
+import '../motion.dart';
 import '../theme.dart';
 import 'cover_file_image.dart';
 import 'game_icon.dart';
@@ -212,6 +213,9 @@ class _GameCardState extends ConsumerState<GameCard> {
         _hoverEdge == _ResizeEdge.corner ||
         _resizeTarget != null;
     final hasImageLayer = hasBackground || hasBlurBackground;
+    // 悬停抬升与封面推近属于“装饰性动效”，减少动态时整体关闭。
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final lifted = _hovering && !reduceMotion;
     // 无封面磁贴铺强调色底，灰色元信息在绿底上对比度不足。
     final metaColor = hasImageLayer
         ? AppColors.textSecondary
@@ -255,8 +259,8 @@ class _GameCardState extends ConsumerState<GameCard> {
               followerAnchor: Alignment.topLeft,
               child: IgnorePointer(
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOutBack,
+                  duration: AppMotion.ghost,
+                  curve: AppMotion.curve,
                   width: ghostWidth,
                   height: ghostHeight,
                   alignment: Alignment.center,
@@ -305,339 +309,403 @@ class _GameCardState extends ConsumerState<GameCard> {
                       _showContextMenu(context, details),
                   child: AnimatedScale(
                     scale: _pressed ? 0.985 : 1,
-                    duration: const Duration(milliseconds: 90),
-                    curve: Curves.easeOutCubic,
-                    child: CompositedTransformTarget(
-                      link: _resizeLink,
-                      child: Container(
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: hasImageLayer
-                              ? AppColors.surface
-                              : scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (hasBackground)
-                              Positioned.fill(
-                                child: CoverFileImage(
-                                  file: backgroundFile,
-                                  cacheWidth: cacheWidth,
-                                  cacheHeight: cacheHeight,
-                                  errorBuilder: (_, _, _) =>
-                                      const SizedBox.shrink(),
+                    duration: AppMotion.press,
+                    curve: AppMotion.curve,
+                    child: AnimatedContainer(
+                      duration: AppMotion.hover,
+                      curve: AppMotion.curve,
+                      // 悬停抬升 3px 并浮出 MD3 阴影；阴影随抬升同步淡入。
+                      transform: Matrix4.translationValues(
+                        0,
+                        lifted ? -3 : 0,
+                        0,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        // 未悬停时不挂阴影，避免整墙每帧绘制透明模糊层。
+                        boxShadow: lifted
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(130),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 10),
                                 ),
-                              ),
-                            if (hasBlurBackground)
-                              Positioned.fill(
-                                child: Opacity(
-                                  opacity: widget.game.backgroundBlurAmount
-                                      .clamp(0.0, 1.0),
-                                  child: CoverFileImage(
-                                    file: File(detailPath),
-                                    cacheWidth: cacheWidth,
-                                    cacheHeight: cacheHeight,
-                                    errorBuilder: (_, _, _) =>
-                                        const SizedBox.shrink(),
-                                  ),
+                                BoxShadow(
+                                  color: scheme.primary.withAlpha(44),
+                                  blurRadius: 26,
                                 ),
-                              ),
-                            if (!hasImageLayer)
-                              Positioned(
-                                right: -18,
-                                bottom: -22,
-                                child: Icon(
-                                  Icons.videogame_asset_rounded,
-                                  size: switch (size) {
-                                    MetroTileSize.small => 112,
-                                    MetroTileSize.wide => 112,
-                                    MetroTileSize.tall => 144,
-                                    MetroTileSize.large => 168,
-                                  },
-                                  color: scheme.primary.withAlpha(22),
-                                ),
-                              ),
-                            if (hasImageLayer)
-                              const Positioned.fill(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Color(0x330D0F12),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Color(0x1A0D0F12),
-                                        Color(0xF20D0F12),
-                                      ],
+                              ]
+                            : const <BoxShadow>[],
+                      ),
+                      child: CompositedTransformTarget(
+                        link: _resizeLink,
+                        child: Container(
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: hasImageLayer
+                                ? AppColors.surface
+                                : scheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (hasBackground)
+                                Positioned.fill(
+                                  // 封面缓慢推近 5%，只有悬停时才察觉；
+                                  // 文字与操作条不受缩放影响。
+                                  child: AnimatedScale(
+                                    scale: lifted ? 1.05 : 1,
+                                    duration: AppMotion.cover,
+                                    curve: AppMotion.curve,
+                                    child: CoverFileImage(
+                                      file: backgroundFile,
+                                      cacheWidth: cacheWidth,
+                                      cacheHeight: cacheHeight,
+                                      errorBuilder: (_, _, _) =>
+                                          const SizedBox.shrink(),
                                     ),
                                   ),
                                 ),
-                              ),
-                            Positioned.fill(
-                              child: AnimatedOpacity(
-                                opacity: showActions ? 1 : 0,
-                                duration: const Duration(milliseconds: 120),
-                                child: ColoredBox(
-                                  color: scheme.onSurface.withAlpha(18),
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.all(padding),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      GameIcon(
-                                        gameId: widget.game.id,
-                                        size: iconSize,
-                                        radius: 6,
-                                        iconSize: iconSize * 0.55,
-                                      ),
-                                      const Spacer(),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          if (widget.game.favorite)
-                                            const Icon(
-                                              Icons.star_rounded,
-                                              color: Colors.amber,
-                                              size: 17,
-                                            ),
-                                          if (isActive)
-                                            Padding(
-                                              padding: EdgeInsets.only(
-                                                top: widget.game.favorite
-                                                    ? 5
-                                                    : 0,
-                                              ),
-                                              child: _StopwatchPill(
-                                                color: trackingColor,
-                                                activeState: activeState,
-                                                inputIdle: isInputIdle,
-                                                compact:
-                                                    size ==
-                                                        MetroTileSize.small ||
-                                                    size == MetroTileSize.tall,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    widget.game.title,
-                                    maxLines: titleMaxLines,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: titleStyle,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.schedule_rounded,
-                                        size: 12,
-                                        color: metaColor,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
-                                        child: Text(
-                                          formatCompactPlayDuration(
-                                            widget.game.totalPlaySeconds,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: metaColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                      if (widget.game.useLocaleEmulator) ...[
-                                        const SizedBox(width: 6),
-                                        _MicroBadge(
-                                          label: 'LE',
-                                          color:
-                                              context.secondaryInteractiveColor,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              right: padding - 4,
-                              bottom: padding - 4,
-                              child: AnimatedOpacity(
-                                opacity: showActions ? 1 : 0,
-                                duration: const Duration(milliseconds: 120),
-                                child: IgnorePointer(
-                                  ignoring: !showActions,
-                                  child: _TileActions(
-                                    onLaunch: widget.onLaunch,
-                                    onOpenDirectory: widget.onOpenDirectory,
+                              if (hasBlurBackground)
+                                Positioned.fill(
+                                  child: Opacity(
+                                    opacity: widget.game.backgroundBlurAmount
+                                        .clamp(0.0, 1.0),
+                                    child: CoverFileImage(
+                                      file: File(detailPath),
+                                      cacheWidth: cacheWidth,
+                                      cacheHeight: cacheHeight,
+                                      errorBuilder: (_, _, _) =>
+                                          const SizedBox.shrink(),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            if (isActive)
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                right: 0,
-                                child: _PulsingBar(color: trackingColor),
-                              ),
-                            if (_focused)
-                              Positioned.fill(
-                                child: IgnorePointer(
+                              if (!hasImageLayer)
+                                Positioned(
+                                  right: -18,
+                                  bottom: -22,
+                                  child: Icon(
+                                    Icons.videogame_asset_rounded,
+                                    size: switch (size) {
+                                      MetroTileSize.small => 112,
+                                      MetroTileSize.wide => 112,
+                                      MetroTileSize.tall => 144,
+                                      MetroTileSize.large => 168,
+                                    },
+                                    color: scheme.primary.withAlpha(22),
+                                  ),
+                                ),
+                              if (hasImageLayer)
+                                const Positioned.fill(
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: scheme.primary,
+                                      color: Color(0x330D0F12),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Color(0x1A0D0F12),
+                                          Color(0xF20D0F12),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              Positioned.fill(
+                                child: AnimatedOpacity(
+                                  opacity: showActions ? 1 : 0,
+                                  duration: AppMotion.hover,
+                                  child: ColoredBox(
+                                    color: scheme.onSurface.withAlpha(18),
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.all(padding),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        GameIcon(
+                                          gameId: widget.game.id,
+                                          size: iconSize,
+                                          radius: 6,
+                                          iconSize: iconSize * 0.55,
+                                        ),
+                                        const Spacer(),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            if (widget.game.favorite)
+                                              const Icon(
+                                                Icons.star_rounded,
+                                                color: Colors.amber,
+                                                size: 17,
+                                              ),
+                                            if (isActive)
+                                              Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: widget.game.favorite
+                                                      ? 5
+                                                      : 0,
+                                                ),
+                                                child: _StopwatchPill(
+                                                  color: trackingColor,
+                                                  activeState: activeState,
+                                                  inputIdle: isInputIdle,
+                                                  compact:
+                                                      size ==
+                                                          MetroTileSize.small ||
+                                                      size ==
+                                                          MetroTileSize.tall,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      widget.game.title,
+                                      maxLines: titleMaxLines,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: titleStyle,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.schedule_rounded,
+                                          size: 12,
+                                          color: metaColor,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            formatCompactPlayDuration(
+                                              widget.game.totalPlaySeconds,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: metaColor,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        if (widget.game.useLocaleEmulator) ...[
+                                          const SizedBox(width: 6),
+                                          _MicroBadge(
+                                            label: 'LE',
+                                            color: context
+                                                .secondaryInteractiveColor,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                right: padding - 4,
+                                bottom: padding - 4,
+                                child: AnimatedSlide(
+                                  offset: showActions
+                                      ? Offset.zero
+                                      : const Offset(0, 0.35),
+                                  duration: AppMotion.actions,
+                                  curve: AppMotion.curve,
+                                  child: AnimatedOpacity(
+                                    opacity: showActions ? 1 : 0,
+                                    duration: AppMotion.actions,
+                                    child: IgnorePointer(
+                                      ignoring: !showActions,
+                                      child: _TileActions(
+                                        onLaunch: widget.onLaunch,
+                                        onOpenDirectory: widget.onOpenDirectory,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (isActive)
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  right: 0,
+                                  child: _PulsingBar(color: trackingColor),
+                                ),
+                              // 悬停描边槽位固定存在，避免拖拽中插删子节点
+                              // 导致手势识别器被重建。
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: AnimatedOpacity(
+                                    opacity: lifted ? 1 : 0,
+                                    duration: AppMotion.hover,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: scheme.primary.withAlpha(90),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_focused)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: scheme.primary,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (widget.onResize != null) ...[
+                                // 高光槽位固定存在，避免拖拽中插入/移除子节点导致
+                                // 手势识别器被重建、丢失 pointer-up。
+                                Positioned(
+                                  top: 8,
+                                  right: 0,
+                                  bottom: 12,
+                                  child: IgnorePointer(
+                                    child: AnimatedOpacity(
+                                      opacity: showRightEdge ? 1 : 0,
+                                      duration: AppMotion.hover,
+                                      child: Container(
                                         width: 2,
+                                        decoration: BoxDecoration(
+                                          color: context.interactiveColor
+                                              .withAlpha(190),
+                                          borderRadius: BorderRadius.circular(
+                                            1,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            if (widget.onResize != null) ...[
-                              // 高光槽位固定存在，避免拖拽中插入/移除子节点导致
-                              // 手势识别器被重建、丢失 pointer-up。
-                              Positioned(
-                                top: 8,
-                                right: 0,
-                                bottom: 12,
-                                child: IgnorePointer(
-                                  child: AnimatedOpacity(
-                                    opacity: showRightEdge ? 1 : 0,
-                                    duration: const Duration(milliseconds: 120),
-                                    child: Container(
-                                      width: 2,
-                                      decoration: BoxDecoration(
-                                        color: context.interactiveColor
-                                            .withAlpha(190),
-                                        borderRadius: BorderRadius.circular(1),
+                                Positioned(
+                                  left: 8,
+                                  right: 12,
+                                  bottom: 0,
+                                  child: IgnorePointer(
+                                    child: AnimatedOpacity(
+                                      opacity: showBottomEdge ? 1 : 0,
+                                      duration: AppMotion.hover,
+                                      child: Container(
+                                        height: 2,
+                                        decoration: BoxDecoration(
+                                          color: context.interactiveColor
+                                              .withAlpha(190),
+                                          borderRadius: BorderRadius.circular(
+                                            1,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                left: 8,
-                                right: 12,
-                                bottom: 0,
-                                child: IgnorePointer(
-                                  child: AnimatedOpacity(
-                                    opacity: showBottomEdge ? 1 : 0,
-                                    duration: const Duration(milliseconds: 120),
-                                    child: Container(
-                                      height: 2,
-                                      decoration: BoxDecoration(
-                                        color: context.interactiveColor
-                                            .withAlpha(190),
-                                        borderRadius: BorderRadius.circular(1),
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  bottom: 10,
+                                  width: 8,
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.resizeLeftRight,
+                                    onEnter: (_) => setState(
+                                      () => _hoverEdge = _ResizeEdge.right,
+                                    ),
+                                    onExit: (_) => setState(() {
+                                      if (_hoverEdge == _ResizeEdge.right) {
+                                        _hoverEdge = null;
+                                      }
+                                    }),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {},
+                                      onPanStart: (_) => _beginResize(),
+                                      onPanUpdate: (details) => _updateResize(
+                                        details,
+                                        _ResizeEdge.right,
                                       ),
+                                      onPanEnd: (_) => _endResize(),
+                                      onPanCancel: _endResize,
                                     ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                bottom: 10,
-                                width: 8,
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.resizeLeftRight,
-                                  onEnter: (_) => setState(
-                                    () => _hoverEdge = _ResizeEdge.right,
-                                  ),
-                                  onExit: (_) => setState(() {
-                                    if (_hoverEdge == _ResizeEdge.right) {
-                                      _hoverEdge = null;
-                                    }
-                                  }),
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () {},
-                                    onPanStart: (_) => _beginResize(),
-                                    onPanUpdate: (details) => _updateResize(
-                                      details,
-                                      _ResizeEdge.right,
+                                Positioned(
+                                  left: 0,
+                                  right: 10,
+                                  bottom: 0,
+                                  height: 8,
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.resizeUpDown,
+                                    onEnter: (_) => setState(
+                                      () => _hoverEdge = _ResizeEdge.bottom,
                                     ),
-                                    onPanEnd: (_) => _endResize(),
-                                    onPanCancel: _endResize,
+                                    onExit: (_) => setState(() {
+                                      if (_hoverEdge == _ResizeEdge.bottom) {
+                                        _hoverEdge = null;
+                                      }
+                                    }),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {},
+                                      onPanStart: (_) => _beginResize(),
+                                      onPanUpdate: (details) => _updateResize(
+                                        details,
+                                        _ResizeEdge.bottom,
+                                      ),
+                                      onPanEnd: (_) => _endResize(),
+                                      onPanCancel: _endResize,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                left: 0,
-                                right: 10,
-                                bottom: 0,
-                                height: 8,
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.resizeUpDown,
-                                  onEnter: (_) => setState(
-                                    () => _hoverEdge = _ResizeEdge.bottom,
-                                  ),
-                                  onExit: (_) => setState(() {
-                                    if (_hoverEdge == _ResizeEdge.bottom) {
-                                      _hoverEdge = null;
-                                    }
-                                  }),
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () {},
-                                    onPanStart: (_) => _beginResize(),
-                                    onPanUpdate: (details) => _updateResize(
-                                      details,
-                                      _ResizeEdge.bottom,
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  width: 10,
+                                  height: 10,
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors
+                                        .resizeUpLeftDownRight,
+                                    onEnter: (_) => setState(
+                                      () => _hoverEdge = _ResizeEdge.corner,
                                     ),
-                                    onPanEnd: (_) => _endResize(),
-                                    onPanCancel: _endResize,
+                                    onExit: (_) => setState(() {
+                                      if (_hoverEdge == _ResizeEdge.corner) {
+                                        _hoverEdge = null;
+                                      }
+                                    }),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {},
+                                      onPanStart: (_) => _beginResize(),
+                                      onPanUpdate: (details) => _updateResize(
+                                        details,
+                                        _ResizeEdge.corner,
+                                      ),
+                                      onPanEnd: (_) => _endResize(),
+                                      onPanCancel: _endResize,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                width: 10,
-                                height: 10,
-                                child: MouseRegion(
-                                  cursor:
-                                      SystemMouseCursors.resizeUpLeftDownRight,
-                                  onEnter: (_) => setState(
-                                    () => _hoverEdge = _ResizeEdge.corner,
-                                  ),
-                                  onExit: (_) => setState(() {
-                                    if (_hoverEdge == _ResizeEdge.corner) {
-                                      _hoverEdge = null;
-                                    }
-                                  }),
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () {},
-                                    onPanStart: (_) => _beginResize(),
-                                    onPanUpdate: (details) => _updateResize(
-                                      details,
-                                      _ResizeEdge.corner,
-                                    ),
-                                    onPanEnd: (_) => _endResize(),
-                                    onPanCancel: _endResize,
-                                  ),
-                                ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),

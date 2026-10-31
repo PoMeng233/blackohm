@@ -14,6 +14,7 @@ import '../../features/scanner/ingestion_service.dart';
 import '../../features/scanner/library_scanner.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
+import '../motion.dart';
 import '../theme.dart';
 import '../widgets/cover_file_image.dart';
 import '../widgets/exe_decision_dialog.dart';
@@ -22,6 +23,7 @@ import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/game_icon.dart';
 import '../widgets/library_import_dialog.dart';
+import '../widgets/metro_tile_appear.dart';
 import '../widgets/metro_tile_grid.dart';
 import '../widgets/metro_tile_layout.dart';
 
@@ -95,8 +97,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   int? get _selectedFolderId => ref.read(libraryNavigationProvider);
 
   /// 首次构建某张磁贴时播放一次出现动画；同会话内复建不再重播。
-  Widget _withAppear(String key, Widget child) =>
-      _MetroTileAppear(animate: _appearedTiles.add(key), child: child);
+  /// 按墙内序号错峰，避免整屏磁贴同时亮起。
+  Widget _withAppear(String key, int index, Widget child) => MetroTileAppear(
+    animate: _appearedTiles.add(key),
+    delay: AppMotion.staggerFor(index),
+    child: child,
+  );
 
   @override
   void initState() {
@@ -1009,6 +1015,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                     .length;
                                 return _withAppear(
                                   'folder:${folder.id}',
+                                  index,
                                   FolderCard(
                                     folder: folder,
                                     gameCount: gameCount,
@@ -1065,6 +1072,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                               );
                               return _withAppear(
                                 'game:${game.id}',
+                                index,
                                 Draggable<Game>(
                                   data: game,
                                   feedback: Material(
@@ -1431,29 +1439,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 磁贴首次出现时的轻微淡入 + 缩放；只跑一次，不引入常驻动画控制器。
-class _MetroTileAppear extends StatelessWidget {
-  const _MetroTileAppear({required this.animate, required this.child});
-
-  final bool animate;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!animate) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      child: child,
-      builder: (context, value, child) => Opacity(
-        opacity: value,
-        child: Transform.scale(scale: 0.97 + 0.03 * value, child: child),
-      ),
     );
   }
 }

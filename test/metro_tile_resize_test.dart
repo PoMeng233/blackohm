@@ -73,7 +73,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    // 入场动画最长 600ms + 错峰 280ms，等它结束再取磁贴坐标做拖拽。
+    await tester.pump(const Duration(milliseconds: 900));
   }
 
   Finder gameCardOf(String title) =>

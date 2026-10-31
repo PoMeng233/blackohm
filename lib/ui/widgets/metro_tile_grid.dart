@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
 import 'metro_tile_layout.dart';
 
 class MetroTileGrid extends StatelessWidget {
@@ -11,7 +12,7 @@ class MetroTileGrid extends StatelessWidget {
     required this.bands,
     required this.itemBuilder,
     this.padding = const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    this.animationDuration = const Duration(milliseconds: 200),
+    this.animationDuration = AppMotion.reflow,
     super.key,
   });
 
@@ -37,7 +38,7 @@ class MetroTileGrid extends StatelessWidget {
           child: TweenAnimationBuilder<double>(
             tween: Tween<double>(end: metrics.bandHeight(band.rowCount)),
             duration: animationDuration,
-            curve: Curves.easeOutCubic,
+            curve: AppMotion.curve,
             builder: (context, height, child) =>
                 SizedBox(height: height, child: child),
             // 拉伸预览允许溢出 band，裁剪交给 ListView 视口。
@@ -48,7 +49,7 @@ class MetroTileGrid extends StatelessWidget {
                   AnimatedPositioned(
                     key: ValueKey<int>(tile.index),
                     duration: animationDuration,
-                    curve: Curves.easeOutBack,
+                    curve: AppMotion.curve,
                     left: metrics.leftFor(tile.column),
                     top: metrics.topFor(tile.row),
                     width: metrics.widthFor(tile.size),

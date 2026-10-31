@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
+import '../motion.dart';
 import '../theme.dart';
 import 'metro_tile_layout.dart';
 
@@ -39,6 +40,8 @@ class _FolderCardState extends State<FolderCard> {
     final primary = Theme.of(context).colorScheme.primary;
     final isLarge = widget.tileSize == MetroTileSize.large;
     final isSmall = widget.tileSize == MetroTileSize.small;
+    // 与游戏磁贴保持同一套悬停语言：抬升 3px + 阴影淡入。
+    final lifted = _hovering && !MediaQuery.disableAnimationsOf(context);
     final iconSize = isLarge ? 44.0 : (isSmall ? 28.0 : 34.0);
     final padding = isLarge ? 18.0 : (isSmall ? 12.0 : 14.0);
     return DragTarget<Game>(
@@ -58,7 +61,9 @@ class _FolderCardState extends State<FolderCard> {
               onTap: widget.onOpen,
               onSecondaryTapUp: widget.onShowMenu,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
+                duration: AppMotion.hover,
+                curve: AppMotion.curve,
+                transform: Matrix4.translationValues(0, lifted ? -3 : 0, 0),
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: dragHover
@@ -69,7 +74,22 @@ class _FolderCardState extends State<FolderCard> {
                   borderRadius: BorderRadius.circular(8),
                   border: dragHover
                       ? Border.all(color: primary, width: 2)
-                      : null,
+                      : (_hovering
+                            ? Border.all(color: primary.withAlpha(70))
+                            : null),
+                  boxShadow: lifted
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(130),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: primary.withAlpha(44),
+                            blurRadius: 26,
+                          ),
+                        ]
+                      : const <BoxShadow>[],
                 ),
                 child: Stack(
                   children: [
