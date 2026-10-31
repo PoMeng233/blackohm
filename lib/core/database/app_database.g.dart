@@ -663,6 +663,18 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _tileSizeMeta = const VerificationMeta(
+    'tileSize',
+  );
+  @override
+  late final GeneratedColumn<int> tileSize = GeneratedColumn<int>(
+    'tile_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -684,6 +696,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
     launchCount,
     bangumiSubjectId,
     bangumiScore,
+    tileSize,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -841,6 +854,12 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         ),
       );
     }
+    if (data.containsKey('tile_size')) {
+      context.handle(
+        _tileSizeMeta,
+        tileSize.isAcceptableOrUnknown(data['tile_size']!, _tileSizeMeta),
+      );
+    }
     return context;
   }
 
@@ -926,6 +945,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
         DriftSqlType.double,
         data['${effectivePrefix}bangumi_score'],
       ),
+      tileSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tile_size'],
+      )!,
     );
   }
 
@@ -987,6 +1010,9 @@ class Game extends DataClass implements Insertable<Game> {
 
   /// Bangumi 评分（0-10，详情页展示）。
   final double? bangumiScore;
+
+  /// 用户手动指定的磁贴尺寸：0 = 自动，1 = 小，2 = 宽，3 = 竖，4 = 大。
+  final int tileSize;
   const Game({
     required this.id,
     required this.title,
@@ -1007,6 +1033,7 @@ class Game extends DataClass implements Insertable<Game> {
     required this.launchCount,
     this.bangumiSubjectId,
     this.bangumiScore,
+    required this.tileSize,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1044,6 +1071,7 @@ class Game extends DataClass implements Insertable<Game> {
     if (!nullToAbsent || bangumiScore != null) {
       map['bangumi_score'] = Variable<double>(bangumiScore);
     }
+    map['tile_size'] = Variable<int>(tileSize);
     return map;
   }
 
@@ -1082,6 +1110,7 @@ class Game extends DataClass implements Insertable<Game> {
       bangumiScore: bangumiScore == null && nullToAbsent
           ? const Value.absent()
           : Value(bangumiScore),
+      tileSize: Value(tileSize),
     );
   }
 
@@ -1114,6 +1143,7 @@ class Game extends DataClass implements Insertable<Game> {
       launchCount: serializer.fromJson<int>(json['launchCount']),
       bangumiSubjectId: serializer.fromJson<int?>(json['bangumiSubjectId']),
       bangumiScore: serializer.fromJson<double?>(json['bangumiScore']),
+      tileSize: serializer.fromJson<int>(json['tileSize']),
     );
   }
   @override
@@ -1139,6 +1169,7 @@ class Game extends DataClass implements Insertable<Game> {
       'launchCount': serializer.toJson<int>(launchCount),
       'bangumiSubjectId': serializer.toJson<int?>(bangumiSubjectId),
       'bangumiScore': serializer.toJson<double?>(bangumiScore),
+      'tileSize': serializer.toJson<int>(tileSize),
     };
   }
 
@@ -1162,6 +1193,7 @@ class Game extends DataClass implements Insertable<Game> {
     int? launchCount,
     Value<int?> bangumiSubjectId = const Value.absent(),
     Value<double?> bangumiScore = const Value.absent(),
+    int? tileSize,
   }) => Game(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -1188,6 +1220,7 @@ class Game extends DataClass implements Insertable<Game> {
         ? bangumiSubjectId.value
         : this.bangumiSubjectId,
     bangumiScore: bangumiScore.present ? bangumiScore.value : this.bangumiScore,
+    tileSize: tileSize ?? this.tileSize,
   );
   Game copyWithCompanion(GamesCompanion data) {
     return Game(
@@ -1230,6 +1263,7 @@ class Game extends DataClass implements Insertable<Game> {
       bangumiScore: data.bangumiScore.present
           ? data.bangumiScore.value
           : this.bangumiScore,
+      tileSize: data.tileSize.present ? data.tileSize.value : this.tileSize,
     );
   }
 
@@ -1254,7 +1288,8 @@ class Game extends DataClass implements Insertable<Game> {
           ..write('folderId: $folderId, ')
           ..write('launchCount: $launchCount, ')
           ..write('bangumiSubjectId: $bangumiSubjectId, ')
-          ..write('bangumiScore: $bangumiScore')
+          ..write('bangumiScore: $bangumiScore, ')
+          ..write('tileSize: $tileSize')
           ..write(')'))
         .toString();
   }
@@ -1280,6 +1315,7 @@ class Game extends DataClass implements Insertable<Game> {
     launchCount,
     bangumiSubjectId,
     bangumiScore,
+    tileSize,
   );
   @override
   bool operator ==(Object other) =>
@@ -1303,7 +1339,8 @@ class Game extends DataClass implements Insertable<Game> {
           other.folderId == this.folderId &&
           other.launchCount == this.launchCount &&
           other.bangumiSubjectId == this.bangumiSubjectId &&
-          other.bangumiScore == this.bangumiScore);
+          other.bangumiScore == this.bangumiScore &&
+          other.tileSize == this.tileSize);
 }
 
 class GamesCompanion extends UpdateCompanion<Game> {
@@ -1326,6 +1363,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
   final Value<int> launchCount;
   final Value<int?> bangumiSubjectId;
   final Value<double?> bangumiScore;
+  final Value<int> tileSize;
   const GamesCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -1346,6 +1384,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.launchCount = const Value.absent(),
     this.bangumiSubjectId = const Value.absent(),
     this.bangumiScore = const Value.absent(),
+    this.tileSize = const Value.absent(),
   });
   GamesCompanion.insert({
     this.id = const Value.absent(),
@@ -1367,6 +1406,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     this.launchCount = const Value.absent(),
     this.bangumiSubjectId = const Value.absent(),
     this.bangumiScore = const Value.absent(),
+    this.tileSize = const Value.absent(),
   }) : title = Value(title),
        exePath = Value(exePath),
        dirPath = Value(dirPath);
@@ -1390,6 +1430,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Expression<int>? launchCount,
     Expression<int>? bangumiSubjectId,
     Expression<double>? bangumiScore,
+    Expression<int>? tileSize,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1413,6 +1454,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       if (launchCount != null) 'launch_count': launchCount,
       if (bangumiSubjectId != null) 'bangumi_subject_id': bangumiSubjectId,
       if (bangumiScore != null) 'bangumi_score': bangumiScore,
+      if (tileSize != null) 'tile_size': tileSize,
     });
   }
 
@@ -1436,6 +1478,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
     Value<int>? launchCount,
     Value<int?>? bangumiSubjectId,
     Value<double?>? bangumiScore,
+    Value<int>? tileSize,
   }) {
     return GamesCompanion(
       id: id ?? this.id,
@@ -1457,6 +1500,7 @@ class GamesCompanion extends UpdateCompanion<Game> {
       launchCount: launchCount ?? this.launchCount,
       bangumiSubjectId: bangumiSubjectId ?? this.bangumiSubjectId,
       bangumiScore: bangumiScore ?? this.bangumiScore,
+      tileSize: tileSize ?? this.tileSize,
     );
   }
 
@@ -1524,6 +1568,9 @@ class GamesCompanion extends UpdateCompanion<Game> {
     if (bangumiScore.present) {
       map['bangumi_score'] = Variable<double>(bangumiScore.value);
     }
+    if (tileSize.present) {
+      map['tile_size'] = Variable<int>(tileSize.value);
+    }
     return map;
   }
 
@@ -1548,7 +1595,8 @@ class GamesCompanion extends UpdateCompanion<Game> {
           ..write('folderId: $folderId, ')
           ..write('launchCount: $launchCount, ')
           ..write('bangumiSubjectId: $bangumiSubjectId, ')
-          ..write('bangumiScore: $bangumiScore')
+          ..write('bangumiScore: $bangumiScore, ')
+          ..write('tileSize: $tileSize')
           ..write(')'))
         .toString();
   }
@@ -2410,7 +2458,7 @@ class $$GameFoldersTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$GameFoldersTable, GameFolder>(table),
                   $$GameFoldersTableReferences(db, table, e),
                 ),
               )
@@ -2480,6 +2528,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       Value<int> launchCount,
       Value<int?> bangumiSubjectId,
       Value<double?> bangumiScore,
+      Value<int> tileSize,
     });
 typedef $$GamesTableUpdateCompanionBuilder =
     GamesCompanion Function({
@@ -2502,6 +2551,7 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<int> launchCount,
       Value<int?> bangumiSubjectId,
       Value<double?> bangumiScore,
+      Value<int> tileSize,
     });
 
 final class $$GamesTableReferences
@@ -2639,6 +2689,11 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
 
   ColumnFilters<double> get bangumiScore => $composableBuilder(
     column: $table.bangumiScore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tileSize => $composableBuilder(
+    column: $table.tileSize,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2790,6 +2845,11 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get tileSize => $composableBuilder(
+    column: $table.tileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$GameFoldersTableOrderingComposer get folderId {
     final $$GameFoldersTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2897,6 +2957,9 @@ class $$GamesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get tileSize =>
+      $composableBuilder(column: $table.tileSize, builder: (column) => column);
+
   $$GameFoldersTableAnnotationComposer get folderId {
     final $$GameFoldersTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -2993,6 +3056,7 @@ class $$GamesTableTableManager
                 Value<int> launchCount = const Value.absent(),
                 Value<int?> bangumiSubjectId = const Value.absent(),
                 Value<double?> bangumiScore = const Value.absent(),
+                Value<int> tileSize = const Value.absent(),
               }) => GamesCompanion(
                 id: id,
                 title: title,
@@ -3013,6 +3077,7 @@ class $$GamesTableTableManager
                 launchCount: launchCount,
                 bangumiSubjectId: bangumiSubjectId,
                 bangumiScore: bangumiScore,
+                tileSize: tileSize,
               ),
           createCompanionCallback:
               ({
@@ -3035,6 +3100,7 @@ class $$GamesTableTableManager
                 Value<int> launchCount = const Value.absent(),
                 Value<int?> bangumiSubjectId = const Value.absent(),
                 Value<double?> bangumiScore = const Value.absent(),
+                Value<int> tileSize = const Value.absent(),
               }) => GamesCompanion.insert(
                 id: id,
                 title: title,
@@ -3055,11 +3121,14 @@ class $$GamesTableTableManager
                 launchCount: launchCount,
                 bangumiSubjectId: bangumiSubjectId,
                 bangumiScore: bangumiScore,
+                tileSize: tileSize,
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$GamesTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$GamesTable, Game>(table),
+                  $$GamesTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback:
@@ -3395,7 +3464,7 @@ class $$PlaySessionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlaySessionsTable, PlaySession>(table),
                   $$PlaySessionsTableReferences(db, table, e),
                 ),
               )
@@ -3574,7 +3643,16 @@ class $$AppSettingsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$AppSettingsTable, AppSetting>(table),
+                  BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),

@@ -77,6 +77,9 @@ class Games extends Table {
 
   /// Bangumi 评分（0-10，详情页展示）。
   RealColumn get bangumiScore => real().nullable()();
+
+  /// 用户手动指定的磁贴尺寸：0 = 自动，1 = 小，2 = 宽，3 = 竖，4 = 大。
+  IntColumn get tileSize => integer().withDefault(const Constant(0))();
 }
 
 /// 游戏库自定义文件夹/分类表
@@ -136,7 +139,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -166,6 +169,9 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(games, games.launchCount);
         await m.addColumn(games, games.bangumiSubjectId);
         await m.addColumn(games, games.bangumiScore);
+      }
+      if (from < 8) {
+        await m.addColumn(games, games.tileSize);
       }
     },
     beforeOpen: (details) async {

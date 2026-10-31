@@ -78,6 +78,7 @@ void main() {
       favorite: false,
       folderId: 2,
       launchCount: 3,
+      tileSize: 0,
     );
 
     bool dirty({

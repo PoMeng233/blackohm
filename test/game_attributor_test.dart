@@ -21,6 +21,7 @@ Game _game({
     createdAt: DateTime(2026, 1, 1),
     totalPlaySeconds: 0,
     favorite: false,
+    tileSize: 0,
   );
 }
 

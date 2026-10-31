@@ -22,6 +22,7 @@ Game _game({
   totalPlaySeconds: 0,
   favorite: false,
   launchCount: 0,
+  tileSize: 0,
 );
 
 BangumiImageCandidate _c(

@@ -11,6 +11,7 @@ class MetroTileGrid extends StatelessWidget {
     required this.bands,
     required this.itemBuilder,
     this.padding = const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    this.animationDuration = const Duration(milliseconds: 200),
     super.key,
   });
 
@@ -19,6 +20,7 @@ class MetroTileGrid extends StatelessWidget {
   final Widget Function(BuildContext context, int index, MetroTileSize size)
   itemBuilder;
   final EdgeInsets padding;
+  final Duration animationDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -31,12 +33,22 @@ class MetroTileGrid extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: bandIndex == bands.length - 1 ? 0 : MetroGridMetrics.gap,
           ),
-          child: SizedBox(
-            height: metrics.bandHeight(band.rowCount),
+          // band 高度随尺寸变化过渡，避免整行突然跳动。
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: metrics.bandHeight(band.rowCount)),
+            duration: animationDuration,
+            curve: Curves.easeOutCubic,
+            builder: (context, height, child) =>
+                SizedBox(height: height, child: child),
+            // 拉伸预览允许溢出 band，裁剪交给 ListView 视口。
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 for (final tile in band.tiles)
-                  Positioned(
+                  AnimatedPositioned(
+                    key: ValueKey<int>(tile.index),
+                    duration: animationDuration,
+                    curve: Curves.easeOutBack,
                     left: metrics.leftFor(tile.column),
                     top: metrics.topFor(tile.row),
                     width: metrics.widthFor(tile.size),

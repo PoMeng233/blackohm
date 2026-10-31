@@ -89,7 +89,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   String _searchQuery = '';
   bool _adding = false;
 
+  /// 本次页面会话内已播过出现动画的磁贴；滚动复用时不再重播。
+  final Set<String> _appearedTiles = <String>{};
+
   int? get _selectedFolderId => ref.read(libraryNavigationProvider);
+
+  /// 首次构建某张磁贴时播放一次出现动画；同会话内复建不再重播。
+  Widget _withAppear(String key, Widget child) =>
+      _MetroTileAppear(animate: _appearedTiles.add(key), child: child);
 
   @override
   void initState() {
@@ -733,7 +740,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ),
                       backgroundColor: WidgetStateProperty.resolveWith(
                         (states) => states.contains(WidgetState.selected)
-                            ? Theme.of(context).colorScheme.primary.withAlpha(30)
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withAlpha(30)
                             : Colors.transparent,
                       ),
                       foregroundColor: WidgetStateProperty.resolveWith(
@@ -978,12 +987,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                 MetroTileSizeInput(
                                   hasCover: _hasUsableCover(game),
                                   favorite: game.favorite,
+                                  manualSize: metroTileSizeFromCode(
+                                    game.tileSize,
+                                  ),
                                 ),
-                            ]),
+                            ], columns: metrics.columns),
                           ];
                           final bands = packMetroBands(
                             tileSizes,
                             metrics.columns,
+                            maxLargePerBand: metrics.columns >= 10 ? 2 : 1,
                           );
                           return MetroTileGrid(
                             metrics: metrics,
@@ -994,20 +1007,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                 final gameCount = games
                                     .where((game) => game.folderId == folder.id)
                                     .length;
-                                return FolderCard(
-                                  folder: folder,
-                                  gameCount: gameCount,
-                                  totalPlaySeconds:
-                                      folderTotals[folder.id] ?? 0,
-                                  tileSize: size,
-                                  onOpen: () => _selectFolder(folder.id),
-                                  onMoveGame: (game) => _moveGameToFolder(
-                                    game,
-                                    folder.id,
-                                    folder.name,
+                                return _withAppear(
+                                  'folder:${folder.id}',
+                                  FolderCard(
+                                    folder: folder,
+                                    gameCount: gameCount,
+                                    totalPlaySeconds:
+                                        folderTotals[folder.id] ?? 0,
+                                    tileSize: size,
+                                    onOpen: () => _selectFolder(folder.id),
+                                    onMoveGame: (game) => _moveGameToFolder(
+                                      game,
+                                      folder.id,
+                                      folder.name,
+                                    ),
+                                    onShowMenu: (details) =>
+                                        _showFolderContextMenu(folder, details),
                                   ),
-                                  onShowMenu: (details) =>
-                                      _showFolderContextMenu(folder, details),
                                 );
                               }
 
@@ -1035,23 +1051,39 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                   onDelete: () => ref
                                       .read(gameRepoProvider)
                                       .delete(game.id),
+                                  onResize: (size) => ref
+                                      .read(gameRepoProvider)
+                                      .update(
+                                        game.id,
+                                        GamesCompanion(
+                                          tileSize: Value(
+                                            metroTileSizeToCode(size),
+                                          ),
+                                        ),
+                                      ),
                                 ),
                               );
-                              return Draggable<Game>(
-                                data: game,
-                                feedback: Material(
-                                  color: Colors.transparent,
-                                  child: SizedBox(
-                                    width: metrics.widthFor(size),
-                                    height: metrics.heightFor(size),
-                                    child: Opacity(opacity: 0.85, child: card),
+                              return _withAppear(
+                                'game:${game.id}',
+                                Draggable<Game>(
+                                  data: game,
+                                  feedback: Material(
+                                    color: Colors.transparent,
+                                    child: SizedBox(
+                                      width: metrics.widthFor(size),
+                                      height: metrics.heightFor(size),
+                                      child: Opacity(
+                                        opacity: 0.85,
+                                        child: card,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                childWhenDragging: Opacity(
-                                  opacity: 0.3,
+                                  childWhenDragging: Opacity(
+                                    opacity: 0.3,
+                                    child: card,
+                                  ),
                                   child: card,
                                 ),
-                                child: card,
                               );
                             },
                           );
@@ -1399,6 +1431,29 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 磁贴首次出现时的轻微淡入 + 缩放；只跑一次，不引入常驻动画控制器。
+class _MetroTileAppear extends StatelessWidget {
+  const _MetroTileAppear({required this.animate, required this.child});
+
+  final bool animate;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!animate) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.scale(scale: 0.97 + 0.03 * value, child: child),
+      ),
     );
   }
 }
