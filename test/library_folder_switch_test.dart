@@ -8,6 +8,8 @@ import 'package:blackohm/ui/pages/library_page.dart';
 import 'package:blackohm/ui/theme.dart';
 import 'package:blackohm/ui/widgets/folder_card.dart';
 import 'package:blackohm/ui/widgets/game_card.dart';
+import 'package:blackohm/ui/widgets/metro_tile_grid.dart';
+import 'package:blackohm/ui/widgets/metro_tile_layout.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -185,32 +187,21 @@ void main() {
         tester,
         viewportSize: Size(pageWidth, 720),
       );
-      final grid = tester.widget<GridView>(find.byType(GridView));
-      final delegate =
-          grid.gridDelegate as SliverGridDelegateWithMaxCrossAxisExtent;
-      expect(delegate.mainAxisExtent, 190);
-      expect(delegate.maxCrossAxisExtent, 180);
-      final gridWidth = tester.getSize(find.byType(GridView)).width;
-      final availableWidth =
-          gridWidth - grid.padding!.resolve(TextDirection.ltr).horizontal;
-      final columnCount =
-          (availableWidth /
-                  (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
-              .ceil();
-      // Flutter 的列数计算包含间距，但只扣除列间间距；卡片实际宽度
-      // 可以略大于 maxCrossAxisExtent（1008px 库页下为 182.4px）。
-      final expectedCardWidth =
-          (availableWidth - delegate.crossAxisSpacing * (columnCount - 1)) /
-          columnCount;
+      expect(find.byType(MetroTileGrid), findsOneWidget);
+      final metrics = MetroGridMetrics.forWidth(pageWidth - 40);
+      expect(metrics.columns, inInclusiveRange(4, 10));
       expect(find.byType(FolderCard), findsWidgets);
       expect(find.byType(GameCard), findsNWidgets(games.length));
-      for (final element in [
-        ...find.byType(FolderCard).evaluate(),
-        ...find.byType(GameCard).evaluate(),
-      ]) {
+      final folderSize = tester.getSize(find.byType(FolderCard).first);
+      expect(
+        folderSize.width,
+        closeTo(metrics.widthFor(MetroTileSize.wide), 0.001),
+      );
+      expect(folderSize.height, closeTo(metrics.tileExtent, 0.001));
+      for (final element in find.byType(GameCard).evaluate()) {
         final size = tester.getSize(find.byWidget(element.widget));
-        expect(size.height, 190);
-        expect(size.width, closeTo(expectedCardWidth, 0.001));
+        expect(size.width, closeTo(metrics.tileExtent, 0.001));
+        expect(size.height, closeTo(metrics.tileExtent, 0.001));
       }
       expect(tester.takeException(), isNull);
 
@@ -218,7 +209,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.byType(FolderCard), findsNothing);
       expect(find.byType(GameCard), findsOneWidget);
-      expect(tester.getSize(find.byType(GameCard)).height, 190);
+      expect(
+        tester.getSize(find.byType(GameCard)).height,
+        closeTo(metrics.tileExtent, 0.001),
+      );
       expect(tester.takeException(), isNull);
       await tester.tap(find.byIcon(Icons.view_list));
       await tester.pump(const Duration(milliseconds: 200));

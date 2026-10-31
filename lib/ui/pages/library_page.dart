@@ -15,7 +15,6 @@ import '../../features/scanner/library_scanner.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
-import '../widgets/active_record_frame.dart';
 import '../widgets/cover_file_image.dart';
 import '../widgets/exe_decision_dialog.dart';
 import '../widgets/folder_card.dart';
@@ -23,6 +22,8 @@ import '../widgets/game_card.dart';
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/game_icon.dart';
 import '../widgets/library_import_dialog.dart';
+import '../widgets/metro_tile_grid.dart';
+import '../widgets/metro_tile_layout.dart';
 
 enum LibraryViewMode { grid, list }
 
@@ -480,7 +481,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   Widget _buildFolderTabs(List<GameFolder> folders) {
     return Container(
-      height: 38,
+      height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -565,23 +566,24 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }) {
     final primary = Theme.of(context).colorScheme.primary;
     Widget chip({bool isHovered = false}) => InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: primary.withAlpha(18),
       onTap: onTap,
       onLongPress: onLongPress,
       onSecondaryTapUp: onSecondaryTapUp,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           color: isHovered || isReorderHovering
-              ? primary.withAlpha(40)
-              : (isSelected ? primary.withAlpha(28) : AppColors.surface),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isHovered || isReorderHovering
-                ? primary
-                : (isSelected ? primary : AppColors.border),
-            width: isHovered || isReorderHovering || isSelected ? 1.5 : 1,
+              ? primary.withAlpha(24)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? primary : Colors.transparent,
+              width: 2,
+            ),
           ),
         ),
         child: Row(
@@ -594,15 +596,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         ? Icons.inbox_rounded
                         : Icons.folder_rounded),
               size: 15,
-              color: isSelected ? primary : AppColors.textSecondary,
+              color: isSelected ? primary : AppColors.textMuted,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? primary : AppColors.textPrimary,
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
               ),
             ),
           ],
@@ -626,6 +630,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     );
   }
 
+  bool _hasUsableCover(Game game) {
+    final path = game.backgroundPath;
+    return path != null && path.isNotEmpty && File(path).existsSync();
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(libraryNavigationProvider);
@@ -638,113 +647,175 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     );
     final activeGameId = activeState.gameId;
     final launcher = LaunchService();
+    final allGames = gamesAsync.valueOrNull ?? const <Game>[];
+    final libraryTotalSeconds = allGames.fold<int>(
+      0,
+      (sum, game) => sum + game.totalPlaySeconds,
+    );
 
     return Column(
       children: [
-        // 顶部工具栏：搜索 + 排序 + 收藏过滤 + 网格/列表切换
+        // 页面标题与命令区
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 38,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: '搜索游戏名称或路径...',
-                      prefixIcon: const Icon(
-                        Icons.search,
-                        size: 18,
-                        color: AppColors.textMuted,
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '游戏库',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w300,
+                            height: 1.05,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${allGames.length} 款游戏 · 累计 '
+                          '${formatCompactPlayDuration(libraryTotalSeconds)}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _adding ? null : _addGame,
+                    icon: _adding
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_rounded, size: 17),
+                    label: const Text('添加游戏'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SegmentedButton<LibraryViewMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: LibraryViewMode.grid,
+                        icon: Icon(Icons.grid_view, size: 16),
                       ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: _searchCtrl.clear,
-                            )
-                          : null,
+                      ButtonSegment(
+                        value: LibraryViewMode.list,
+                        icon: Icon(Icons.view_list, size: 16),
+                      ),
+                    ],
+                    selected: {_viewMode},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (s) =>
+                        setState(() => _viewMode = s.first),
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      side: const WidgetStatePropertyAll(
+                        BorderSide(color: AppColors.border),
+                      ),
+                      backgroundColor: WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.selected)
+                            ? Theme.of(context).colorScheme.primary.withAlpha(30)
+                            : Colors.transparent,
+                      ),
+                      foregroundColor: WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.selected)
+                            ? Theme.of(context).colorScheme.primary
+                            : AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<LibrarySort>(
-                  value: _sort,
-                  borderRadius: BorderRadius.circular(12),
-                  dropdownColor: AppColors.surfaceActive,
-                  onChanged: (value) {
-                    if (value != null) setState(() => _sort = value);
-                  },
-                  items: const [
-                    DropdownMenuItem(
-                      value: LibrarySort.recent,
-                      child: Text('最近游玩'),
-                    ),
-                    DropdownMenuItem(
-                      value: LibrarySort.title,
-                      child: Text('名称 A-Z'),
-                    ),
-                    DropdownMenuItem(
-                      value: LibrarySort.totalTime,
-                      child: Text('累计时长'),
-                    ),
-                    DropdownMenuItem(
-                      value: LibrarySort.createdAt,
-                      child: Text('添加时间'),
-                    ),
-                    DropdownMenuItem(
-                      value: LibrarySort.favorite,
-                      child: Text('收藏优先'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: _onlyFavorites ? '显示全部' : '仅看收藏',
-                icon: Icon(
-                  _onlyFavorites ? Icons.star : Icons.star_border,
-                  color: _onlyFavorites
-                      ? Colors.amber
-                      : AppColors.textSecondary,
-                ),
-                onPressed: () =>
-                    setState(() => _onlyFavorites = !_onlyFavorites),
-              ),
-              const SizedBox(width: 4),
-              FilledButton.icon(
-                onPressed: _adding ? null : _addGame,
-                icon: _adding
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_rounded, size: 17),
-                label: const Text('添加游戏'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: 8),
-              SegmentedButton<LibraryViewMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: LibraryViewMode.grid,
-                    icon: Icon(Icons.grid_view, size: 16),
-                  ),
-                  ButtonSegment(
-                    value: LibraryViewMode.list,
-                    icon: Icon(Icons.view_list, size: 16),
                   ),
                 ],
-                selected: {_viewMode},
-                onSelectionChanged: (s) => setState(() => _viewMode = s.first),
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: '搜索游戏名称或路径...',
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            size: 18,
+                            color: AppColors.textMuted,
+                          ),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: _searchCtrl.clear,
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<LibrarySort>(
+                      value: _sort,
+                      borderRadius: BorderRadius.circular(12),
+                      dropdownColor: AppColors.surfaceActive,
+                      onChanged: (value) {
+                        if (value != null) setState(() => _sort = value);
+                      },
+                      items: const [
+                        DropdownMenuItem(
+                          value: LibrarySort.recent,
+                          child: Text('最近游玩'),
+                        ),
+                        DropdownMenuItem(
+                          value: LibrarySort.title,
+                          child: Text('名称 A-Z'),
+                        ),
+                        DropdownMenuItem(
+                          value: LibrarySort.totalTime,
+                          child: Text('累计时长'),
+                        ),
+                        DropdownMenuItem(
+                          value: LibrarySort.createdAt,
+                          child: Text('添加时间'),
+                        ),
+                        DropdownMenuItem(
+                          value: LibrarySort.favorite,
+                          child: Text('收藏优先'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: _onlyFavorites ? '显示全部' : '仅看收藏',
+                    icon: Icon(
+                      _onlyFavorites ? Icons.star : Icons.star_border,
+                      color: _onlyFavorites
+                          ? Colors.amber
+                          : AppColors.textSecondary,
+                    ),
+                    onPressed: () =>
+                        setState(() => _onlyFavorites = !_onlyFavorites),
+                  ),
+                ],
               ),
             ],
           ),
@@ -753,10 +824,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         // 文件夹分类栏
         foldersAsync.when(
           data: _buildFolderTabs,
-          loading: () => const SizedBox(height: 38),
+          loading: () => const SizedBox(height: 40),
           error: (_, _) => const SizedBox.shrink(),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 2),
 
         // 游戏库内容区
         Expanded(
@@ -865,362 +936,464 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 );
               }
 
-              // 网格视图
-              if (_viewMode == LibraryViewMode.grid) {
-                return GridView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 180,
-                    mainAxisExtent: 190,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                  ),
-                  itemCount: folderCards.length + filtered.length,
-                  itemBuilder: (context, i) {
-                    if (i < folderCards.length) {
-                      final folder = folderCards[i];
-                      final gameCount = games
-                          .where((game) => game.folderId == folder.id)
-                          .length;
-                      return FolderCard(
-                        folder: folder,
-                        gameCount: gameCount,
-                        totalPlaySeconds: folderTotals[folder.id] ?? 0,
-                        onOpen: () => _selectFolder(folder.id),
-                        onMoveGame: (game) =>
-                            _moveGameToFolder(game, folder.id, folder.name),
-                        onShowMenu: (details) =>
-                            _showFolderContextMenu(folder, details),
-                      );
-                    }
+              final filteredTotalSeconds = filtered.fold<int>(
+                0,
+                (sum, game) => sum + game.totalPlaySeconds,
+              );
+              // 全部游戏时顶栏副标题已有同样统计，重复一遍只是噪音；
+              // 只有切进某个文件夹/未分类时才需要这一行说明当前范围。
+              final Widget? sectionHeader = _selectedFolderId == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                      child: Text(
+                        '${filtered.length} 款游戏 · 累计 '
+                        '${formatCompactPlayDuration(filteredTotalSeconds)}',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    );
 
-                    final g = filtered[i - folderCards.length];
-                    final card = RepaintBoundary(
-                      child: GameCard(
-                        game: g,
-                        onOpenDetail: () => showDialog<void>(
-                          context: context,
-                          builder: (_) => GameDetailDialog(game: g),
-                        ),
-                        onLaunch: () => _launchGame(g, launcher),
-                        onOpenDirectory: () => _openGameDirectory(g, launcher),
-                        onToggleFavorite: () => ref
-                            .read(gameRepoProvider)
-                            .update(
-                              g.id,
-                              GamesCompanion(favorite: Value(!g.favorite)),
+              // 磁贴墙
+              if (_viewMode == LibraryViewMode.grid) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ?sectionHeader,
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final metrics = MetroGridMetrics.forWidth(
+                            (constraints.maxWidth - 40).clamp(
+                              0.0,
+                              double.infinity,
                             ),
-                        onDelete: () => ref.read(gameRepoProvider).delete(g.id),
+                          );
+                          final tileSizes = <MetroTileSize>[
+                            for (final _ in folderCards) MetroTileSize.wide,
+                            ...assignMetroTileSizes([
+                              for (final game in filtered)
+                                MetroTileSizeInput(
+                                  hasCover: _hasUsableCover(game),
+                                  favorite: game.favorite,
+                                ),
+                            ]),
+                          ];
+                          final bands = packMetroBands(
+                            tileSizes,
+                            metrics.columns,
+                          );
+                          return MetroTileGrid(
+                            metrics: metrics,
+                            bands: bands,
+                            itemBuilder: (context, index, size) {
+                              if (index < folderCards.length) {
+                                final folder = folderCards[index];
+                                final gameCount = games
+                                    .where((game) => game.folderId == folder.id)
+                                    .length;
+                                return FolderCard(
+                                  folder: folder,
+                                  gameCount: gameCount,
+                                  totalPlaySeconds:
+                                      folderTotals[folder.id] ?? 0,
+                                  tileSize: size,
+                                  onOpen: () => _selectFolder(folder.id),
+                                  onMoveGame: (game) => _moveGameToFolder(
+                                    game,
+                                    folder.id,
+                                    folder.name,
+                                  ),
+                                  onShowMenu: (details) =>
+                                      _showFolderContextMenu(folder, details),
+                                );
+                              }
+
+                              final game = filtered[index - folderCards.length];
+                              final card = RepaintBoundary(
+                                child: GameCard(
+                                  game: game,
+                                  tileSize: size,
+                                  onOpenDetail: () => showDialog<void>(
+                                    context: context,
+                                    builder: (_) =>
+                                        GameDetailDialog(game: game),
+                                  ),
+                                  onLaunch: () => _launchGame(game, launcher),
+                                  onOpenDirectory: () =>
+                                      _openGameDirectory(game, launcher),
+                                  onToggleFavorite: () => ref
+                                      .read(gameRepoProvider)
+                                      .update(
+                                        game.id,
+                                        GamesCompanion(
+                                          favorite: Value(!game.favorite),
+                                        ),
+                                      ),
+                                  onDelete: () => ref
+                                      .read(gameRepoProvider)
+                                      .delete(game.id),
+                                ),
+                              );
+                              return Draggable<Game>(
+                                data: game,
+                                feedback: Material(
+                                  color: Colors.transparent,
+                                  child: SizedBox(
+                                    width: metrics.widthFor(size),
+                                    height: metrics.heightFor(size),
+                                    child: Opacity(opacity: 0.85, child: card),
+                                  ),
+                                ),
+                                childWhenDragging: Opacity(
+                                  opacity: 0.3,
+                                  child: card,
+                                ),
+                                child: card,
+                              );
+                            },
+                          );
+                        },
                       ),
-                    );
-                    return Draggable<Game>(
-                      data: g,
-                      feedback: Material(
-                        color: Colors.transparent,
-                        child: SizedBox(
-                          width: 140,
-                          height: 150,
-                          child: Opacity(opacity: 0.85, child: card),
-                        ),
-                      ),
-                      childWhenDragging: Opacity(opacity: 0.3, child: card),
-                      child: card,
-                    );
-                  },
+                    ),
+                  ],
                 );
               }
 
               // 横排/列表视图
-              return ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final g = filtered[i];
-                  final isCardActive = activeGameId == g.id;
-                  final isInputIdle =
-                      isCardActive &&
-                      activeState.phase == TrackingPhase.inputIdle;
-                  final ratio = maxPlaySeconds > 0
-                      ? (g.totalPlaySeconds / maxPlaySeconds).clamp(0.0, 1.0)
-                      : 0.0;
-                  final widthFraction = ratio * 0.75;
-                  final backgroundPath = g.backgroundPath;
-                  final backgroundFile =
-                      backgroundPath == null || backgroundPath.isEmpty
-                      ? null
-                      : File(backgroundPath);
-                  final hasBackground =
-                      backgroundFile != null && backgroundFile.existsSync();
-                  // 渐隐目标色必须与行底色一致：活跃行为 surfaceActive，
-                  // 否则封面会溶入错误颜色形成发暗鬼影。
-                  final rowBg = isCardActive
-                      ? AppColors.surfaceActive
-                      : AppColors.surface;
-                  final rowItem = Material(
-                    color: rowBg,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(
-                        color: g.favorite
-                            ? const Color(0xFFFFC857)
-                            : (isCardActive
-                                  ? context.interactiveColor
-                                  : AppColors.border),
-                        width: g.favorite || isCardActive ? 1.5 : 1,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ?sectionHeader,
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
                       ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => showDialog<void>(
-                        context: context,
-                        builder: (_) => GameDetailDialog(game: g),
-                      ),
-                      child: Stack(
-                        children: [
-                          // 封面图按比例裁切填满时长条，以宽高上限等比解码；
-                          // 图片上先叠一层均匀压暗降低亮度（保证前景文字可读），
-                          // 右缘用动态 stops 的渐变覆盖：全不透明点精确落在
-                          // 位图边缘，冗余段保持终色，彻底消除硬切缝。
-                          if (hasBackground && widthFraction > 0)
-                            Positioned.fill(
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final rowW = constraints.maxWidth;
-                                  final dpr = MediaQuery.devicePixelRatioOf(
-                                    context,
-                                  );
-                                  final imageW = widthFraction * rowW;
-                                  final fade = computeRowCoverFade(
-                                    rowWidth: rowW,
-                                    imageWidth: imageW,
-                                  );
-                                  final cacheWidth = (imageW * dpr)
-                                      .round()
-                                      .clamp(1, 960);
-                                  return Stack(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, i) {
+                        final g = filtered[i];
+                        final isCardActive = activeGameId == g.id;
+                        final isInputIdle =
+                            isCardActive &&
+                            activeState.phase == TrackingPhase.inputIdle;
+                        final ratio = maxPlaySeconds > 0
+                            ? (g.totalPlaySeconds / maxPlaySeconds).clamp(
+                                0.0,
+                                1.0,
+                              )
+                            : 0.0;
+                        final widthFraction = ratio * 0.75;
+                        final backgroundPath = g.backgroundPath;
+                        final backgroundFile =
+                            backgroundPath == null || backgroundPath.isEmpty
+                            ? null
+                            : File(backgroundPath);
+                        final hasBackground =
+                            backgroundFile != null &&
+                            backgroundFile.existsSync();
+                        // 渐隐目标色必须与行底色一致：活跃行为 surfaceActive，
+                        // 否则封面会溶入错误颜色形成发暗鬼影。
+                        final rowBg = isCardActive
+                            ? AppColors.surfaceActive
+                            : AppColors.surface;
+                        final rowItem = Material(
+                          color: rowBg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => GameDetailDialog(game: g),
+                            ),
+                            child: Stack(
+                              children: [
+                                // 封面图按比例裁切填满时长条，以宽高上限等比解码；
+                                // 图片上先叠一层均匀压暗降低亮度（保证前景文字可读），
+                                // 右缘用动态 stops 的渐变覆盖：全不透明点精确落在
+                                // 位图边缘，冗余段保持终色，彻底消除硬切缝。
+                                if (hasBackground && widthFraction > 0)
+                                  Positioned.fill(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final rowW = constraints.maxWidth;
+                                        final dpr =
+                                            MediaQuery.devicePixelRatioOf(
+                                              context,
+                                            );
+                                        final imageW = widthFraction * rowW;
+                                        final fade = computeRowCoverFade(
+                                          rowWidth: rowW,
+                                          imageWidth: imageW,
+                                        );
+                                        final cacheWidth = (imageW * dpr)
+                                            .round()
+                                            .clamp(1, 960);
+                                        return Stack(
+                                          children: [
+                                            Positioned(
+                                              left: 0,
+                                              top: 0,
+                                              bottom: 0,
+                                              width: imageW,
+                                              child: ClipRect(
+                                                child: CoverFileImage(
+                                                  file: backgroundFile,
+                                                  cacheWidth: cacheWidth,
+                                                  cacheHeight:
+                                                      (constraints.maxHeight *
+                                                              dpr)
+                                                          .round()
+                                                          .clamp(1, 960),
+                                                  gaplessPlayback: true,
+                                                  filterQuality:
+                                                      FilterQuality.low,
+                                                  errorBuilder: (_, _, _) =>
+                                                      const SizedBox.shrink(),
+                                                ),
+                                              ),
+                                            ),
+                                            // 均匀压暗层：与网格卡片的压暗处理同风格。
+                                            Positioned(
+                                              left: 0,
+                                              top: 0,
+                                              bottom: 0,
+                                              width: imageW,
+                                              child: const DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: Color(0x4D0D0F12),
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              left: fade.overlayLeft,
+                                              top: 0,
+                                              bottom: 0,
+                                              width: fade.overlayWidth,
+                                              child: IgnorePointer(
+                                                child: DecoratedBox(
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin:
+                                                          Alignment.centerLeft,
+                                                      end:
+                                                          Alignment.centerRight,
+                                                      colors: [
+                                                        Colors.transparent,
+                                                        rowBg.withAlpha(150),
+                                                        rowBg,
+                                                      ],
+                                                      stops: fade.stops,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                // 前景内容区
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Positioned(
-                                        left: 0,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: imageW,
-                                        child: ClipRect(
-                                          child: CoverFileImage(
-                                            file: backgroundFile,
-                                            cacheWidth: cacheWidth,
-                                            cacheHeight:
-                                                (constraints.maxHeight * dpr)
-                                                    .round()
-                                                    .clamp(1, 960),
-                                            gaplessPlayback: true,
-                                            filterQuality: FilterQuality.low,
-                                            errorBuilder: (_, _, _) =>
-                                                const SizedBox.shrink(),
-                                          ),
-                                        ),
+                                      GameIcon(
+                                        gameId: g.id,
+                                        size: 32,
+                                        radius: 6,
+                                        iconSize: 20,
                                       ),
-                                      // 均匀压暗层：与网格卡片的压暗处理同风格。
-                                      Positioned(
-                                        left: 0,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: imageW,
-                                        child: const DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            color: Color(0x4D0D0F12),
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: fade.overlayLeft,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: fade.overlayWidth,
-                                        child: IgnorePointer(
-                                          child: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                begin: Alignment.centerLeft,
-                                                end: Alignment.centerRight,
-                                                colors: [
-                                                  Colors.transparent,
-                                                  rowBg.withAlpha(150),
-                                                  rowBg,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    g.title,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.textPrimary,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (g.favorite) ...[
+                                                  const SizedBox(width: 6),
+                                                  const Icon(
+                                                    Icons.star_rounded,
+                                                    color: Colors.amber,
+                                                    size: 15,
+                                                  ),
                                                 ],
-                                                stops: fade.stops,
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              g.exePath,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: AppColors.textMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isCardActive) ...[
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: isInputIdle
+                                                ? AppColors.textSecondary
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          isInputIdle ? '无操作已暂停' : '正在游玩',
+                                          style: TextStyle(
+                                            color: isInputIdle
+                                                ? AppColors.textSecondary
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ] else
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.bgDark.withAlpha(
+                                              135,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: AppColors.border.withAlpha(
+                                                130,
                                               ),
                                             ),
                                           ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.schedule,
+                                                size: 13,
+                                                color: AppColors.textMuted,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                formatCompactPlayDuration(
+                                                  g.totalPlaySeconds,
+                                                ),
+                                                style: const TextStyle(
+                                                  color: AppColors.textPrimary,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
+                                      const SizedBox(width: 12),
+                                      IconButton(
+                                        tooltip: '运行文件',
+                                        icon: Icon(
+                                          Icons.play_arrow,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          size: 20,
+                                        ),
+                                        onPressed: () =>
+                                            _launchGame(g, launcher),
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ),
-                          // 前景内容区
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            child: Row(
-                              children: [
-                                GameIcon(
-                                  gameId: g.id,
-                                  size: 32,
-                                  radius: 6,
-                                  iconSize: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        g.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.textPrimary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
+                                      IconButton(
+                                        tooltip: '打开游戏目录',
+                                        icon: const Icon(
+                                          Icons.folder_open_rounded,
+                                          color: AppColors.textSecondary,
+                                          size: 19,
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        g.exePath,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 11,
-                                        ),
+                                        onPressed: () =>
+                                            _openGameDirectory(g, launcher),
                                       ),
                                     ],
                                   ),
                                 ),
-                                if (isCardActive) ...[
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
+                                // 活跃行用贴边的强调条替代整圈描边，
+                                // 与磁贴墙的顶部脉冲条属于同一套状态语言。
+                                if (isCardActive)
+                                  Positioned(
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: 3,
+                                    child: ColoredBox(
                                       color: isInputIdle
                                           ? AppColors.textSecondary
                                           : Theme.of(
                                               context,
                                             ).colorScheme.primary,
-                                      shape: BoxShape.circle,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    isInputIdle ? '无操作已暂停' : '正在游玩',
-                                    style: TextStyle(
-                                      color: isInputIdle
-                                          ? AppColors.textSecondary
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ] else
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.bgDark.withAlpha(135),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: AppColors.border.withAlpha(130),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.schedule,
-                                          size: 13,
-                                          color: AppColors.textMuted,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          formatCompactPlayDuration(
-                                            g.totalPlaySeconds,
-                                          ),
-                                          style: const TextStyle(
-                                            color: AppColors.textPrimary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  tooltip: '运行文件',
-                                  icon: Icon(
-                                    Icons.play_arrow,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => _launchGame(g, launcher),
-                                ),
-                                IconButton(
-                                  tooltip: '打开游戏目录',
-                                  icon: const Icon(
-                                    Icons.folder_open_rounded,
-                                    color: AppColors.textSecondary,
-                                    size: 19,
-                                  ),
-                                  onPressed: () =>
-                                      _openGameDirectory(g, launcher),
-                                ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  );
+                        );
 
-                  final framedRow = ActiveRecordFrame(
-                    active:
-                        activeState.phase == TrackingPhase.live &&
-                        activeGameId == g.id,
-                    color: Theme.of(context).colorScheme.primary,
-                    radius: 8,
-                    child: rowItem,
-                  );
-                  return Draggable<Game>(
-                    data: g,
-                    feedback: Material(
-                      color: Colors.transparent,
-                      child: SizedBox(
-                        width: 320,
-                        child: Opacity(opacity: 0.85, child: rowItem),
-                      ),
+                        return Draggable<Game>(
+                          data: g,
+                          feedback: Material(
+                            color: Colors.transparent,
+                            child: SizedBox(
+                              width: 320,
+                              child: Opacity(opacity: 0.85, child: rowItem),
+                            ),
+                          ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.3,
+                            child: rowItem,
+                          ),
+                          child: rowItem,
+                        );
+                      },
                     ),
-                    childWhenDragging: Opacity(opacity: 0.3, child: framedRow),
-                    child: framedRow,
-                  );
-                },
+                  ),
+                ],
               );
             },
           ),

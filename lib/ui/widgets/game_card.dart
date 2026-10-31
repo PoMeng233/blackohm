@@ -1,9 +1,10 @@
-/// 游戏卡片组件：支持封面/图标展示、前台活跃呼吸光效、实时秒表与右键菜单。
+/// Metro 磁贴：全幅封面/强调色块、尺寸相关排版、悬停操作与实时计时状态。
 library;
 
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
@@ -11,9 +12,9 @@ import '../../features/background/background_service.dart';
 import '../../features/tracking/tracking_engine.dart';
 import '../../providers.dart';
 import '../theme.dart';
-import 'active_record_frame.dart';
 import 'cover_file_image.dart';
 import 'game_icon.dart';
+import 'metro_tile_layout.dart';
 
 class GameCard extends ConsumerStatefulWidget {
   const GameCard({
@@ -23,6 +24,7 @@ class GameCard extends ConsumerStatefulWidget {
     required this.onOpenDetail,
     required this.onDelete,
     required this.onToggleFavorite,
+    this.tileSize = MetroTileSize.small,
     super.key,
   });
 
@@ -32,6 +34,7 @@ class GameCard extends ConsumerStatefulWidget {
   final VoidCallback onOpenDetail;
   final VoidCallback onDelete;
   final VoidCallback onToggleFavorite;
+  final MetroTileSize tileSize;
 
   @override
   ConsumerState<GameCard> createState() => _GameCardState();
@@ -39,6 +42,8 @@ class GameCard extends ConsumerStatefulWidget {
 
 class _GameCardState extends ConsumerState<GameCard> {
   bool _hovering = false;
+  bool _focused = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +56,6 @@ class _GameCardState extends ConsumerState<GameCard> {
       }),
     );
     final isActive = activeState.isActive;
-    final isLive = activeState.phase == TrackingPhase.live;
     final isGrace = activeState.phase == TrackingPhase.grace;
     final isInputIdle = activeState.phase == TrackingPhase.inputIdle;
     final trackingColor = isGrace
@@ -68,47 +72,94 @@ class _GameCardState extends ConsumerState<GameCard> {
         isCurrentDetailBackground(detailPath) &&
         detailPath != null &&
         File(detailPath).existsSync();
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: GestureDetector(
-        onTap: widget.onOpenDetail,
-        onSecondaryTapUp: (details) => _showContextMenu(context, details),
-        child: ActiveRecordFrame(
-          active: isLive,
-          color: trackingColor,
-          radius: 10,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
+    final size = widget.tileSize;
+    final scheme = Theme.of(context).colorScheme;
+    final showActions = _hovering || _focused;
+    final padding = switch (size) {
+      MetroTileSize.small => 12.0,
+      MetroTileSize.wide => 14.0,
+      MetroTileSize.large => 18.0,
+    };
+    final iconSize = switch (size) {
+      MetroTileSize.small => 40.0,
+      MetroTileSize.wide => 48.0,
+      MetroTileSize.large => 64.0,
+    };
+    final titleStyle = switch (size) {
+      MetroTileSize.small => const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+        height: 1.2,
+      ),
+      MetroTileSize.wide => const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        height: 1.2,
+      ),
+      MetroTileSize.large => const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 22,
+        fontWeight: FontWeight.w300,
+        height: 1.15,
+      ),
+    };
+    final titleMaxLines = size == MetroTileSize.small ? 1 : 2;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = ((size == MetroTileSize.large ? 460 : 360) * dpr)
+        .round()
+        .clamp(1, 960);
+    final cacheHeight = ((size == MetroTileSize.large ? 460 : 360) * dpr)
+        .round()
+        .clamp(1, 960);
+    final hasImageLayer = hasBackground || hasBlurBackground;
+    // 无封面磁贴铺强调色底，灰色元信息在绿底上对比度不足。
+    final metaColor = hasImageLayer
+        ? AppColors.textSecondary
+        : Colors.white.withAlpha(200);
+
+    return Semantics(
+      button: true,
+      label:
+          '${widget.game.title}，累计 ${formatPlayDuration(widget.game.totalPlaySeconds)}',
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (value != _focused) setState(() => _focused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onOpenDetail();
+              return null;
+            },
+          ),
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: GestureDetector(
+            onTap: widget.onOpenDetail,
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapUp: (_) => setState(() => _pressed = false),
+            onTapCancel: () => setState(() => _pressed = false),
+            onSecondaryTapUp: (details) => _showContextMenu(context, details),
+            child: AnimatedScale(
+              scale: _pressed ? 0.985 : 1,
+              duration: const Duration(milliseconds: 90),
+              curve: Curves.easeOutCubic,
+              child: Container(
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: _hovering ? AppColors.surfaceHover : AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isGrace
-                        ? AppColors.error
-                        : (isActive
-                              ? context.interactiveColor
-                              : (widget.game.favorite
-                                    ? const Color(0xFFFFC857)
-                                    : (_hovering
-                                          ? AppColors.border
-                                          : Colors.transparent))),
-                    width: isActive || isGrace || widget.game.favorite
-                        ? 1.5
-                        : 1,
-                  ),
-                  boxShadow: widget.game.favorite
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFFFFC857).withAlpha(38),
-                            blurRadius: 9,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
+                  color: hasImageLayer
+                      ? AppColors.surface
+                      : scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Stack(
                   fit: StackFit.expand,
@@ -117,8 +168,8 @@ class _GameCardState extends ConsumerState<GameCard> {
                       Positioned.fill(
                         child: CoverFileImage(
                           file: backgroundFile,
-                          cacheWidth: 360,
-                          cacheHeight: 380,
+                          cacheWidth: cacheWidth,
+                          cacheHeight: cacheHeight,
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
                         ),
                       ),
@@ -131,181 +182,166 @@ class _GameCardState extends ConsumerState<GameCard> {
                           ),
                           child: CoverFileImage(
                             file: File(detailPath),
-                            cacheWidth: 360,
-                            cacheHeight: 380,
-                            filterQuality: FilterQuality.low,
+                            cacheWidth: cacheWidth,
+                            cacheHeight: cacheHeight,
                             errorBuilder: (_, _, _) => const SizedBox.shrink(),
                           ),
                         ),
                       ),
-                    if (hasBackground)
-                      Positioned.fill(
+                    if (!hasImageLayer)
+                      Positioned(
+                        right: -18,
+                        bottom: -22,
+                        child: Icon(
+                          Icons.videogame_asset_rounded,
+                          size: size == MetroTileSize.large ? 168 : 112,
+                          color: scheme.primary.withAlpha(22),
+                        ),
+                      ),
+                    if (hasImageLayer)
+                      const Positioned.fill(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(90),
-                            gradient: const LinearGradient(
+                            color: Color(0x330D0F12),
+                            gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Color(0x330D0F12), Color(0xF20D0F12)],
+                              colors: [Color(0x1A0D0F12), Color(0xF20D0F12)],
                             ),
                           ),
                         ),
                       ),
+                    Positioned.fill(
+                      child: AnimatedOpacity(
+                        opacity: showActions ? 1 : 0,
+                        duration: const Duration(milliseconds: 120),
+                        child: ColoredBox(
+                          color: scheme.onSurface.withAlpha(18),
+                        ),
+                      ),
+                    ),
                     Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(padding),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Center(
-                              child: GameIcon(
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              GameIcon(
                                 gameId: widget.game.id,
-                                size: 64,
-                                radius: 8,
-                                iconSize: 32,
+                                size: iconSize,
+                                radius: 6,
+                                iconSize: iconSize * 0.55,
                               ),
-                            ),
+                              const Spacer(),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (widget.game.favorite)
+                                    const Icon(
+                                      Icons.star_rounded,
+                                      color: Colors.amber,
+                                      size: 17,
+                                    ),
+                                  if (isActive)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                        top: widget.game.favorite ? 5 : 0,
+                                      ),
+                                      child: _StopwatchPill(
+                                        color: trackingColor,
+                                        activeState: activeState,
+                                        inputIdle: isInputIdle,
+                                        compact: size == MetroTileSize.small,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
+                          const Spacer(),
                           Text(
                             widget.game.title,
-                            maxLines: 1,
+                            maxLines: titleMaxLines,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: titleStyle,
                           ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              if (isActive) ...[
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: trackingColor,
-                                    shape: BoxShape.circle,
+                              Icon(
+                                Icons.schedule_rounded,
+                                size: 12,
+                                color: metaColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  formatCompactPlayDuration(
+                                    widget.game.totalPlaySeconds,
                                   ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  isInputIdle
-                                      ? '无操作已暂停'
-                                      : formatStopwatch(activeState.elapsedMs),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: trackingColor,
+                                    color: metaColor,
                                     fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    fontFeatures: [
-                                      FontFeature.tabularFigures(),
-                                    ],
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              ] else ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.bgDark.withAlpha(135),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: AppColors.border.withAlpha(130),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.schedule,
-                                        size: 12,
-                                        color: AppColors.textMuted,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        formatCompactPlayDuration(
-                                          widget.game.totalPlaySeconds,
-                                        ),
-                                        style: const TextStyle(
-                                          color: AppColors.textPrimary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              ),
+                              if (widget.game.useLocaleEmulator) ...[
+                                const SizedBox(width: 6),
+                                _MicroBadge(
+                                  label: 'LE',
+                                  color: context.secondaryInteractiveColor,
                                 ),
                               ],
-                              if (widget.game.useLocaleEmulator)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: context.secondaryInteractiveColor
-                                        .withAlpha(40),
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                  child: Text(
-                                    'LE',
-                                    style: TextStyle(
-                                      color: context.secondaryInteractiveColor,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              if (widget.game.favorite)
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 4),
-                                  child: Icon(
-                                    Icons.star,
-                                    color: Colors.amber,
-                                    size: 13,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              IconButton(
-                                tooltip: '运行文件',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                icon: Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: context.interactiveColor,
-                                  size: 18,
-                                ),
-                                onPressed: widget.onLaunch,
-                              ),
-                              IconButton(
-                                tooltip: '打开游戏目录',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(
-                                  Icons.folder_open_rounded,
-                                  color: AppColors.textSecondary,
-                                  size: 17,
-                                ),
-                                onPressed: widget.onOpenDirectory,
-                              ),
                             ],
                           ),
                         ],
                       ),
                     ),
+                    Positioned(
+                      right: padding - 4,
+                      bottom: padding - 4,
+                      child: AnimatedOpacity(
+                        opacity: showActions ? 1 : 0,
+                        duration: const Duration(milliseconds: 120),
+                        child: IgnorePointer(
+                          ignoring: !showActions,
+                          child: _TileActions(
+                            onLaunch: widget.onLaunch,
+                            onOpenDirectory: widget.onOpenDirectory,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (isActive)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        child: _PulsingBar(color: trackingColor),
+                      ),
+                    if (_focused)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: scheme.primary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -381,5 +417,176 @@ class _GameCardState extends ConsumerState<GameCard> {
           widget.onDelete();
       }
     });
+  }
+}
+
+class _StopwatchPill extends StatelessWidget {
+  const _StopwatchPill({
+    required this.color,
+    required this.activeState,
+    required this.inputIdle,
+    required this.compact,
+  });
+
+  final Color color;
+  final TrackingPublicState activeState;
+  final bool inputIdle;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(140),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            inputIdle
+                ? (compact ? '暂停' : '无操作已暂停')
+                : formatStopwatch(activeState.elapsedMs),
+            style: TextStyle(
+              color: color,
+              fontSize: compact ? 10 : 11,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MicroBadge extends StatelessWidget {
+  const _MicroBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withAlpha(38),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _TileActions extends StatelessWidget {
+  const _TileActions({required this.onLaunch, required this.onOpenDirectory});
+
+  final VoidCallback onLaunch;
+  final VoidCallback onOpenDirectory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withAlpha(150),
+      shape: const StadiumBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _TileAction(
+            tooltip: '运行文件',
+            icon: Icons.play_arrow_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: onLaunch,
+          ),
+          _TileAction(
+            tooltip: '打开游戏目录',
+            icon: Icons.folder_open_rounded,
+            color: AppColors.textSecondary,
+            onPressed: onOpenDirectory,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TileAction extends StatelessWidget {
+  const _TileAction({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: onPressed,
+        radius: 16,
+        child: SizedBox(
+          width: 30,
+          height: 30,
+          child: Icon(icon, size: 18, color: color),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulsingBar extends StatefulWidget {
+  const _PulsingBar({required this.color});
+
+  final Color color;
+
+  @override
+  State<_PulsingBar> createState() => _PulsingBarState();
+}
+
+class _PulsingBarState extends State<_PulsingBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+  late final Animation<double> _opacity = Tween<double>(
+    begin: 0.35,
+    end: 1,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SizedBox(height: 3, child: ColoredBox(color: widget.color)),
+    );
   }
 }
