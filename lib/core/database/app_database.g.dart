@@ -2173,6 +2173,413 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
   }
 }
 
+class $GameAliasesTable extends GameAliases
+    with TableInfo<$GameAliasesTable, GameAliase> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GameAliasesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _gameIdMeta = const VerificationMeta('gameId');
+  @override
+  late final GeneratedColumn<int> gameId = GeneratedColumn<int>(
+    'game_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES games (id)',
+    ),
+  );
+  static const VerificationMeta _exePathMeta = const VerificationMeta(
+    'exePath',
+  );
+  @override
+  late final GeneratedColumn<String> exePath = GeneratedColumn<String>(
+    'exe_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _dirPathMeta = const VerificationMeta(
+    'dirPath',
+  );
+  @override
+  late final GeneratedColumn<String> dirPath = GeneratedColumn<String>(
+    'dir_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    gameId,
+    exePath,
+    dirPath,
+    label,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'game_aliases';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GameAliase> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('game_id')) {
+      context.handle(
+        _gameIdMeta,
+        gameId.isAcceptableOrUnknown(data['game_id']!, _gameIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_gameIdMeta);
+    }
+    if (data.containsKey('exe_path')) {
+      context.handle(
+        _exePathMeta,
+        exePath.isAcceptableOrUnknown(data['exe_path']!, _exePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_exePathMeta);
+    }
+    if (data.containsKey('dir_path')) {
+      context.handle(
+        _dirPathMeta,
+        dirPath.isAcceptableOrUnknown(data['dir_path']!, _dirPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dirPathMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GameAliase map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GameAliase(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      gameId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}game_id'],
+      )!,
+      exePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}exe_path'],
+      )!,
+      dirPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dir_path'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $GameAliasesTable createAlias(String alias) {
+    return $GameAliasesTable(attachedDatabase, alias);
+  }
+}
+
+class GameAliase extends DataClass implements Insertable<GameAliase> {
+  final int id;
+
+  /// 所属游戏（级联删除）。
+  final int gameId;
+
+  /// 标准化 exe 绝对路径（全局唯一）。
+  final String exePath;
+
+  /// exe 所在目录（展示与后续启动扩展用）。
+  final String dirPath;
+
+  /// 来源标签（合并时写入源卡标题，手动添加时可为空）。
+  final String? label;
+  final DateTime createdAt;
+  const GameAliase({
+    required this.id,
+    required this.gameId,
+    required this.exePath,
+    required this.dirPath,
+    this.label,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['game_id'] = Variable<int>(gameId);
+    map['exe_path'] = Variable<String>(exePath);
+    map['dir_path'] = Variable<String>(dirPath);
+    if (!nullToAbsent || label != null) {
+      map['label'] = Variable<String>(label);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  GameAliasesCompanion toCompanion(bool nullToAbsent) {
+    return GameAliasesCompanion(
+      id: Value(id),
+      gameId: Value(gameId),
+      exePath: Value(exePath),
+      dirPath: Value(dirPath),
+      label: label == null && nullToAbsent
+          ? const Value.absent()
+          : Value(label),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory GameAliase.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GameAliase(
+      id: serializer.fromJson<int>(json['id']),
+      gameId: serializer.fromJson<int>(json['gameId']),
+      exePath: serializer.fromJson<String>(json['exePath']),
+      dirPath: serializer.fromJson<String>(json['dirPath']),
+      label: serializer.fromJson<String?>(json['label']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'gameId': serializer.toJson<int>(gameId),
+      'exePath': serializer.toJson<String>(exePath),
+      'dirPath': serializer.toJson<String>(dirPath),
+      'label': serializer.toJson<String?>(label),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  GameAliase copyWith({
+    int? id,
+    int? gameId,
+    String? exePath,
+    String? dirPath,
+    Value<String?> label = const Value.absent(),
+    DateTime? createdAt,
+  }) => GameAliase(
+    id: id ?? this.id,
+    gameId: gameId ?? this.gameId,
+    exePath: exePath ?? this.exePath,
+    dirPath: dirPath ?? this.dirPath,
+    label: label.present ? label.value : this.label,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  GameAliase copyWithCompanion(GameAliasesCompanion data) {
+    return GameAliase(
+      id: data.id.present ? data.id.value : this.id,
+      gameId: data.gameId.present ? data.gameId.value : this.gameId,
+      exePath: data.exePath.present ? data.exePath.value : this.exePath,
+      dirPath: data.dirPath.present ? data.dirPath.value : this.dirPath,
+      label: data.label.present ? data.label.value : this.label,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GameAliase(')
+          ..write('id: $id, ')
+          ..write('gameId: $gameId, ')
+          ..write('exePath: $exePath, ')
+          ..write('dirPath: $dirPath, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, gameId, exePath, dirPath, label, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GameAliase &&
+          other.id == this.id &&
+          other.gameId == this.gameId &&
+          other.exePath == this.exePath &&
+          other.dirPath == this.dirPath &&
+          other.label == this.label &&
+          other.createdAt == this.createdAt);
+}
+
+class GameAliasesCompanion extends UpdateCompanion<GameAliase> {
+  final Value<int> id;
+  final Value<int> gameId;
+  final Value<String> exePath;
+  final Value<String> dirPath;
+  final Value<String?> label;
+  final Value<DateTime> createdAt;
+  const GameAliasesCompanion({
+    this.id = const Value.absent(),
+    this.gameId = const Value.absent(),
+    this.exePath = const Value.absent(),
+    this.dirPath = const Value.absent(),
+    this.label = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  GameAliasesCompanion.insert({
+    this.id = const Value.absent(),
+    required int gameId,
+    required String exePath,
+    required String dirPath,
+    this.label = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : gameId = Value(gameId),
+       exePath = Value(exePath),
+       dirPath = Value(dirPath);
+  static Insertable<GameAliase> custom({
+    Expression<int>? id,
+    Expression<int>? gameId,
+    Expression<String>? exePath,
+    Expression<String>? dirPath,
+    Expression<String>? label,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (gameId != null) 'game_id': gameId,
+      if (exePath != null) 'exe_path': exePath,
+      if (dirPath != null) 'dir_path': dirPath,
+      if (label != null) 'label': label,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  GameAliasesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? gameId,
+    Value<String>? exePath,
+    Value<String>? dirPath,
+    Value<String?>? label,
+    Value<DateTime>? createdAt,
+  }) {
+    return GameAliasesCompanion(
+      id: id ?? this.id,
+      gameId: gameId ?? this.gameId,
+      exePath: exePath ?? this.exePath,
+      dirPath: dirPath ?? this.dirPath,
+      label: label ?? this.label,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (gameId.present) {
+      map['game_id'] = Variable<int>(gameId.value);
+    }
+    if (exePath.present) {
+      map['exe_path'] = Variable<String>(exePath.value);
+    }
+    if (dirPath.present) {
+      map['dir_path'] = Variable<String>(dirPath.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GameAliasesCompanion(')
+          ..write('id: $id, ')
+          ..write('gameId: $gameId, ')
+          ..write('exePath: $exePath, ')
+          ..write('dirPath: $dirPath, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2180,6 +2587,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GamesTable games = $GamesTable(this);
   late final $PlaySessionsTable playSessions = $PlaySessionsTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
+  late final $GameAliasesTable gameAliases = $GameAliasesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2189,6 +2597,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     games,
     playSessions,
     appSettings,
+    gameAliases,
   ];
 }
 
@@ -2471,18 +2880,19 @@ class $$GameFoldersTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (gamesRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       GameFolder,
                       $GameFoldersTable,
-                      Game
+                      Game,
+                      $GamesTable
                     >(
                       currentTable: table,
                       referencedTable: $$GameFoldersTableReferences
                           ._gamesRefsTable(db),
                       managerFromTypedResult: (p0) =>
                           $$GameFoldersTableReferences(db, table, p0).gamesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.folderId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'folder_id',
                       typedResults: items,
                     ),
                 ];
@@ -2588,6 +2998,24 @@ final class $$GamesTableReferences
     ).filter((f) => f.gameId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_playSessionsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$GameAliasesTable, List<GameAliase>>
+  _gameAliasesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.gameAliases,
+    aliasName: 'games__id__game_aliases__game_id',
+  );
+
+  $$GameAliasesTableProcessedTableManager get gameAliasesRefs {
+    final manager = $$GameAliasesTableTableManager(
+      $_db,
+      $_db.gameAliases,
+    ).filter((f) => f.gameId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_gameAliasesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -2736,6 +3164,31 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
           }) => $$PlaySessionsTableFilterComposer(
             $db: $db,
             $table: $db.playSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> gameAliasesRefs(
+    Expression<bool> Function($$GameAliasesTableFilterComposer f) f,
+  ) {
+    final $$GameAliasesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.gameAliases,
+      getReferencedColumn: (t) => t.gameId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GameAliasesTableFilterComposer(
+            $db: $db,
+            $table: $db.gameAliases,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3007,6 +3460,31 @@ class $$GamesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> gameAliasesRefs<T extends Object>(
+    Expression<T> Function($$GameAliasesTableAnnotationComposer a) f,
+  ) {
+    final $$GameAliasesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.gameAliases,
+      getReferencedColumn: (t) => t.gameId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GameAliasesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.gameAliases,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GamesTableTableManager
@@ -3022,7 +3500,11 @@ class $$GamesTableTableManager
           $$GamesTableUpdateCompanionBuilder,
           (Game, $$GamesTableReferences),
           Game,
-          PrefetchHooks Function({bool folderId, bool playSessionsRefs})
+          PrefetchHooks Function({
+            bool folderId,
+            bool playSessionsRefs,
+            bool gameAliasesRefs,
+          })
         > {
   $$GamesTableTableManager(_$AppDatabase db, $GamesTable table)
     : super(
@@ -3132,11 +3614,16 @@ class $$GamesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({folderId = false, playSessionsRefs = false}) {
+              ({
+                folderId = false,
+                playSessionsRefs = false,
+                gameAliasesRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (playSessionsRefs) db.playSessions,
+                    if (gameAliasesRefs) db.gameAliases,
                   ],
                   addJoins:
                       <
@@ -3173,10 +3660,11 @@ class $$GamesTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (playSessionsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           Game,
                           $GamesTable,
-                          PlaySession
+                          PlaySession,
+                          $PlaySessionsTable
                         >(
                           currentTable: table,
                           referencedTable: $$GamesTableReferences
@@ -3187,10 +3675,28 @@ class $$GamesTableTableManager
                                 table,
                                 p0,
                               ).playSessionsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.gameId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'game_id',
+                          typedResults: items,
+                        ),
+                      if (gameAliasesRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Game,
+                          $GamesTable,
+                          GameAliase,
+                          $GameAliasesTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GamesTableReferences
+                              ._gameAliasesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GamesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).gameAliasesRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'game_id',
                           typedResults: items,
                         ),
                     ];
@@ -3213,7 +3719,11 @@ typedef $$GamesTableProcessedTableManager =
       $$GamesTableUpdateCompanionBuilder,
       (Game, $$GamesTableReferences),
       Game,
-      PrefetchHooks Function({bool folderId, bool playSessionsRefs})
+      PrefetchHooks Function({
+        bool folderId,
+        bool playSessionsRefs,
+        bool gameAliasesRefs,
+      })
     >;
 typedef $$PlaySessionsTableCreateCompanionBuilder =
     PlaySessionsCompanion Function({
@@ -3676,6 +4186,336 @@ typedef $$AppSettingsTableProcessedTableManager =
       AppSetting,
       PrefetchHooks Function()
     >;
+typedef $$GameAliasesTableCreateCompanionBuilder =
+    GameAliasesCompanion Function({
+      Value<int> id,
+      required int gameId,
+      required String exePath,
+      required String dirPath,
+      Value<String?> label,
+      Value<DateTime> createdAt,
+    });
+typedef $$GameAliasesTableUpdateCompanionBuilder =
+    GameAliasesCompanion Function({
+      Value<int> id,
+      Value<int> gameId,
+      Value<String> exePath,
+      Value<String> dirPath,
+      Value<String?> label,
+      Value<DateTime> createdAt,
+    });
+
+final class $$GameAliasesTableReferences
+    extends BaseReferences<_$AppDatabase, $GameAliasesTable, GameAliase> {
+  $$GameAliasesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GamesTable _gameIdTable(_$AppDatabase db) =>
+      db.games.createAlias('game_aliases__game_id__games__id');
+
+  $$GamesTableProcessedTableManager get gameId {
+    final $_column = $_itemColumn<int>('game_id')!;
+
+    final manager = $$GamesTableTableManager(
+      $_db,
+      $_db.games,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_gameIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$GameAliasesTableFilterComposer
+    extends Composer<_$AppDatabase, $GameAliasesTable> {
+  $$GameAliasesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get exePath => $composableBuilder(
+    column: $table.exePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dirPath => $composableBuilder(
+    column: $table.dirPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GamesTableFilterComposer get gameId {
+    final $$GamesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gameId,
+      referencedTable: $db.games,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GamesTableFilterComposer(
+            $db: $db,
+            $table: $db.games,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GameAliasesTableOrderingComposer
+    extends Composer<_$AppDatabase, $GameAliasesTable> {
+  $$GameAliasesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get exePath => $composableBuilder(
+    column: $table.exePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dirPath => $composableBuilder(
+    column: $table.dirPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GamesTableOrderingComposer get gameId {
+    final $$GamesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gameId,
+      referencedTable: $db.games,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GamesTableOrderingComposer(
+            $db: $db,
+            $table: $db.games,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GameAliasesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GameAliasesTable> {
+  $$GameAliasesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get exePath =>
+      $composableBuilder(column: $table.exePath, builder: (column) => column);
+
+  GeneratedColumn<String> get dirPath =>
+      $composableBuilder(column: $table.dirPath, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$GamesTableAnnotationComposer get gameId {
+    final $$GamesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gameId,
+      referencedTable: $db.games,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GamesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.games,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GameAliasesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GameAliasesTable,
+          GameAliase,
+          $$GameAliasesTableFilterComposer,
+          $$GameAliasesTableOrderingComposer,
+          $$GameAliasesTableAnnotationComposer,
+          $$GameAliasesTableCreateCompanionBuilder,
+          $$GameAliasesTableUpdateCompanionBuilder,
+          (GameAliase, $$GameAliasesTableReferences),
+          GameAliase,
+          PrefetchHooks Function({bool gameId})
+        > {
+  $$GameAliasesTableTableManager(_$AppDatabase db, $GameAliasesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GameAliasesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GameAliasesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GameAliasesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> gameId = const Value.absent(),
+                Value<String> exePath = const Value.absent(),
+                Value<String> dirPath = const Value.absent(),
+                Value<String?> label = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => GameAliasesCompanion(
+                id: id,
+                gameId: gameId,
+                exePath: exePath,
+                dirPath: dirPath,
+                label: label,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int gameId,
+                required String exePath,
+                required String dirPath,
+                Value<String?> label = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => GameAliasesCompanion.insert(
+                id: id,
+                gameId: gameId,
+                exePath: exePath,
+                dirPath: dirPath,
+                label: label,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$GameAliasesTable, GameAliase>(table),
+                  $$GameAliasesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({gameId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (gameId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.gameId,
+                                referencedTable: $$GameAliasesTableReferences
+                                    ._gameIdTable(db),
+                                referencedColumn: $$GameAliasesTableReferences
+                                    ._gameIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$GameAliasesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GameAliasesTable,
+      GameAliase,
+      $$GameAliasesTableFilterComposer,
+      $$GameAliasesTableOrderingComposer,
+      $$GameAliasesTableAnnotationComposer,
+      $$GameAliasesTableCreateCompanionBuilder,
+      $$GameAliasesTableUpdateCompanionBuilder,
+      (GameAliase, $$GameAliasesTableReferences),
+      GameAliase,
+      PrefetchHooks Function({bool gameId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3688,4 +4528,6 @@ class $AppDatabaseManager {
       $$PlaySessionsTableTableManager(_db, _db.playSessions);
   $$AppSettingsTableTableManager get appSettings =>
       $$AppSettingsTableTableManager(_db, _db.appSettings);
+  $$GameAliasesTableTableManager get gameAliases =>
+      $$GameAliasesTableTableManager(_db, _db.gameAliases);
 }

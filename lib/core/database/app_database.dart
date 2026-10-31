@@ -82,6 +82,33 @@ class Games extends Table {
   IntColumn get tileSize => integer().withDefault(const Constant(0))();
 }
 
+/// 游戏别名 exe：运行任一别名同样计入该卡。
+///
+/// 场景：汉化补丁、启动器、包装壳会启动原版 exe，一张卡需要跟踪多个路径。
+/// 主 exe 仍存于 [Games.exePath]，本表只存附加路径。
+class GameAliases extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// 所属游戏（级联删除）。
+  IntColumn get gameId => integer().references(Games, #id)();
+
+  /// 标准化 exe 绝对路径（全局唯一）。
+  TextColumn get exePath => text().unique()();
+
+  /// exe 所在目录（展示与后续启动扩展用）。
+  TextColumn get dirPath => text()();
+
+  /// 来源标签（合并时写入源卡标题，手动添加时可为空）。
+  TextColumn get label => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  List<String> get customConstraints => [
+    'FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE',
+  ];
+}
+
 /// 游戏库自定义文件夹/分类表
 class GameFolders extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -132,14 +159,16 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Games, PlaySessions, AppSettings, GameFolders])
+@DriftDatabase(
+  tables: [Games, PlaySessions, AppSettings, GameFolders, GameAliases],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_open());
 
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -173,6 +202,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 8) {
         await _addColumnIfMissing(m, games, games.tileSize);
       }
+      if (from < 9) {
+        await _createTableIfMissing(m, gameAliases);
+      }
     },
     beforeOpen: (details) async {
       // WAL 模式：写入低延迟；外键级联生效。
@@ -193,6 +225,17 @@ class AppDatabase extends _$AppDatabase {
     ).get();
     if (info.any((row) => row.data['name'] == column.name)) return;
     await m.addColumn(table, column);
+  }
+
+  /// 迁移可能被中断（表已建、版本号未更新），重跑时 CREATE TABLE 会失败。
+  /// 先查 sqlite_master，存在则跳过。
+  Future<void> _createTableIfMissing(Migrator m, TableInfo table) async {
+    final info = await customSelect(
+      "SELECT name FROM sqlite_master "
+      "WHERE type='table' AND name='${table.actualTableName}'",
+    ).get();
+    if (info.isNotEmpty) return;
+    await m.createTable(table);
   }
 
   Future<void> _seedDefaultFolders() async {
