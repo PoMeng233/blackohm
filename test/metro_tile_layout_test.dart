@@ -326,7 +326,11 @@ void main() {
       final occupied = List.generate(2, (_) => List.filled(4, false));
       for (final tile in bands.first.tiles) {
         for (var r = tile.row; r < tile.row + tile.size.rowSpan; r++) {
-          for (var c = tile.column; c < tile.column + tile.size.columnSpan; c++) {
+          for (
+            var c = tile.column;
+            c < tile.column + tile.size.columnSpan;
+            c++
+          ) {
             occupied[r][c] = true;
           }
         }

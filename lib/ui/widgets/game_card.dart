@@ -688,8 +688,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                                   width: _resizeBand,
                                   child: _resizeHandle(
                                     edge: _ResizeEdge.right,
-                                    cursor:
-                                        SystemMouseCursors.resizeLeftRight,
+                                    cursor: SystemMouseCursors.resizeLeftRight,
                                   ),
                                 ),
                                 Positioned(

@@ -115,10 +115,7 @@ class _GameMergeDialogState extends State<_GameMergeDialog> {
                 final game = list[i];
                 return ListTile(
                   dense: true,
-                  leading: const Icon(
-                    Icons.videogame_asset_outlined,
-                    size: 20,
-                  ),
+                  leading: const Icon(Icons.videogame_asset_outlined, size: 20),
                   title: Text(
                     game.title,
                     maxLines: 1,

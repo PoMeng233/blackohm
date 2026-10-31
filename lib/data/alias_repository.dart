@@ -78,10 +78,7 @@ class AliasRepository {
   ///
   /// 目标卡保留标题、图标、背景、文件夹、启动配置与 Bangumi 信息；
   /// 只并入累计时长、会话、启动次数，并把源卡主 exe 与别名改挂到目标卡。
-  Future<bool> mergeInto({
-    required int targetId,
-    required int sourceId,
-  }) async {
+  Future<bool> mergeInto({required int targetId, required int sourceId}) async {
     if (targetId == sourceId) return false;
     return _db.transaction(() async {
       final target = await (_db.select(
@@ -93,17 +90,13 @@ class AliasRepository {
       if (target == null || source == null) return false;
 
       // 会话必须先迁移：源卡删除会级联清掉未迁移的会话。
-      await (_db.update(
-        _db.playSessions,
-      )..where((s) => s.gameId.equals(sourceId))).write(
-        PlaySessionsCompanion(gameId: Value(targetId)),
-      );
+      await (_db.update(_db.playSessions)
+            ..where((s) => s.gameId.equals(sourceId)))
+          .write(PlaySessionsCompanion(gameId: Value(targetId)));
 
-      await (_db.update(
-        _db.gameAliases,
-      )..where((a) => a.gameId.equals(sourceId))).write(
-        GameAliasesCompanion(gameId: Value(targetId)),
-      );
+      await (_db.update(_db.gameAliases)
+            ..where((a) => a.gameId.equals(sourceId)))
+          .write(GameAliasesCompanion(gameId: Value(targetId)));
 
       await _db
           .into(_db.gameAliases)

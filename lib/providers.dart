@@ -74,22 +74,14 @@ final trackingEngineProvider = Provider<TrackingEngine>((ref) {
   var aliases = const <GameAlias>[];
   void rebuild() => engine.rebuildIndex(games, aliases);
 
-  ref.listen(
-    gameListProvider,
-    (_, next) {
-      games = next.value ?? const <Game>[];
-      rebuild();
-    },
-    fireImmediately: true,
-  );
-  ref.listen(
-    aliasListProvider,
-    (_, next) {
-      aliases = next.value ?? const <GameAlias>[];
-      rebuild();
-    },
-    fireImmediately: true,
-  );
+  ref.listen(gameListProvider, (_, next) {
+    games = next.value ?? const <Game>[];
+    rebuild();
+  }, fireImmediately: true);
+  ref.listen(aliasListProvider, (_, next) {
+    aliases = next.value ?? const <GameAlias>[];
+    rebuild();
+  }, fireImmediately: true);
 
   ref.onDispose(() => unawaited(engine.stop()));
   unawaited(engine.start());

@@ -24,7 +24,8 @@ class GameExeTrackingSection extends ConsumerStatefulWidget {
       _GameExeTrackingSectionState();
 }
 
-class _GameExeTrackingSectionState extends ConsumerState<GameExeTrackingSection> {
+class _GameExeTrackingSectionState
+    extends ConsumerState<GameExeTrackingSection> {
   late final Stream<List<GameAlias>> _aliases = ref
       .read(aliasRepoProvider)
       .watchForGame(widget.game.id);

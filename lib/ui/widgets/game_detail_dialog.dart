@@ -492,9 +492,9 @@ class _GameDetailDialogState extends ConsumerState<GameDetailDialog> {
     final ownerId = await ref.read(aliasRepoProvider).ownerGameIdOf(normalized);
     if (!mounted) return;
     if (ownerId != null && ownerId != widget.game.id) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该 exe 已被其他游戏跟踪，不能切换')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该 exe 已被其他游戏跟踪，不能切换')));
       return;
     }
     if (ownerId == widget.game.id &&

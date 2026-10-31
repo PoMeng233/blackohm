@@ -193,10 +193,7 @@ void main() {
     });
 
     test('exeFileNamesFor 同时包含主程序与别名', () {
-      expect(aliasAttr.exeFileNamesFor(100), {
-        'jeweha.exe',
-        'patch_chs.exe',
-      });
+      expect(aliasAttr.exeFileNamesFor(100), {'jeweha.exe', 'patch_chs.exe'});
     });
   });
 }
