@@ -2880,19 +2880,18 @@ class $$GameFoldersTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (gamesRefs)
-                    await $_getPrefetchedDataByColumns<
+                    await $_getPrefetchedData<
                       GameFolder,
                       $GameFoldersTable,
-                      Game,
-                      $GamesTable
+                      Game
                     >(
                       currentTable: table,
                       referencedTable: $$GameFoldersTableReferences
                           ._gamesRefsTable(db),
                       managerFromTypedResult: (p0) =>
                           $$GameFoldersTableReferences(db, table, p0).gamesRefs,
-                      currentColumn: 'id',
-                      referencedColumn: 'folder_id',
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.folderId == item.id),
                       typedResults: items,
                     ),
                 ];
@@ -3660,11 +3659,10 @@ class $$GamesTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (playSessionsRefs)
-                        await $_getPrefetchedDataByColumns<
+                        await $_getPrefetchedData<
                           Game,
                           $GamesTable,
-                          PlaySession,
-                          $PlaySessionsTable
+                          PlaySession
                         >(
                           currentTable: table,
                           referencedTable: $$GamesTableReferences
@@ -3675,17 +3673,14 @@ class $$GamesTableTableManager
                                 table,
                                 p0,
                               ).playSessionsRefs,
-                          currentColumn: 'id',
-                          referencedColumn: 'game_id',
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.gameId == item.id,
+                              ),
                           typedResults: items,
                         ),
                       if (gameAliasesRefs)
-                        await $_getPrefetchedDataByColumns<
-                          Game,
-                          $GamesTable,
-                          GameAlias,
-                          $GameAliasesTable
-                        >(
+                        await $_getPrefetchedData<Game, $GamesTable, GameAlias>(
                           currentTable: table,
                           referencedTable: $$GamesTableReferences
                               ._gameAliasesRefsTable(db),
@@ -3695,8 +3690,10 @@ class $$GamesTableTableManager
                                 table,
                                 p0,
                               ).gameAliasesRefs,
-                          currentColumn: 'id',
-                          referencedColumn: 'game_id',
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.gameId == item.id,
+                              ),
                           typedResults: items,
                         ),
                     ];
