@@ -37,7 +37,7 @@ GameLiveness evaluateGameLiveness({
 
 /// 可注入的存活探测，便于单元测试与异常降级。
 abstract interface class GameLivenessProbe {
-  GameLiveness probe({required int pid, required String exeFileName});
+  GameLiveness probe({required int pid, required Set<String> exeFileNames});
 }
 
 /// Windows 实现：查询系统进程表。
@@ -45,13 +45,14 @@ class WindowsProcessLivenessProbe implements GameLivenessProbe {
   const WindowsProcessLivenessProbe();
 
   @override
-  GameLiveness probe({required int pid, required String exeFileName}) {
+  GameLiveness probe({required int pid, required Set<String> exeFileNames}) {
     if (pid <= 0) return GameLiveness.unknown;
     final names = w.runningProcessNames();
     // 枚举失败（快照不可用）时不做判断，避免误结束正在进行的会话。
     if (names.isEmpty) return GameLiveness.unknown;
-    final matched =
-        exeFileName.isNotEmpty && names.contains(exeFileName.toLowerCase());
+    final matched = exeFileNames.any(
+      (name) => name.isNotEmpty && names.contains(name.toLowerCase()),
+    );
     return evaluateGameLiveness(
       pid: pid,
       pidAlive: w.isProcessAlive(pid),
@@ -71,7 +72,7 @@ class GraceWatchdog {
   final Duration interval;
 
   int _pid = 0;
-  String _exeFileName = '';
+  Set<String> _exeFileNames = const {};
   DateTime? _lastCheck;
   bool _armed = false;
 
@@ -80,11 +81,11 @@ class GraceWatchdog {
   /// 会话开始或进入 grace 时武装，并重置检查计时基准。
   void arm({
     required int pid,
-    required String exeFileName,
+    required Set<String> exeFileNames,
     required DateTime now,
   }) {
     _pid = pid;
-    _exeFileName = exeFileName;
+    _exeFileNames = Set<String>.unmodifiable(exeFileNames);
     _lastCheck = now;
     _armed = true;
   }
@@ -93,7 +94,7 @@ class GraceWatchdog {
   void disarm() {
     _armed = false;
     _pid = 0;
-    _exeFileName = '';
+    _exeFileNames = const {};
     _lastCheck = null;
   }
 
@@ -103,7 +104,7 @@ class GraceWatchdog {
     final last = _lastCheck;
     if (last != null && now.difference(last) < interval) return false;
     _lastCheck = now;
-    return probe.probe(pid: _pid, exeFileName: _exeFileName) ==
+    return probe.probe(pid: _pid, exeFileNames: _exeFileNames) ==
         GameLiveness.closed;
   }
 }

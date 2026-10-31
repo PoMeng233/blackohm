@@ -69,10 +69,27 @@ final recentGamesProvider = StreamProvider<List<Game>>(
 final trackingEngineProvider = Provider<TrackingEngine>((ref) {
   final engine = TrackingEngine(sessions: ref.watch(sessionRepoProvider));
 
-  // 库变化 → 重建 exePath 命中索引（入库即生效，无需重启引擎）。
-  ref.listen(gameListProvider, (_, next) {
-    engine.rebuildIndex(next.value ?? const <Game>[]);
-  }, fireImmediately: true);
+  // 库 / 别名变化 → 重建 exePath 命中索引（入库即生效，无需重启引擎）。
+  var games = const <Game>[];
+  var aliases = const <GameAlias>[];
+  void rebuild() => engine.rebuildIndex(games, aliases);
+
+  ref.listen(
+    gameListProvider,
+    (_, next) {
+      games = next.value ?? const <Game>[];
+      rebuild();
+    },
+    fireImmediately: true,
+  );
+  ref.listen(
+    aliasListProvider,
+    (_, next) {
+      aliases = next.value ?? const <GameAlias>[];
+      rebuild();
+    },
+    fireImmediately: true,
+  );
 
   ref.onDispose(() => unawaited(engine.stop()));
   unawaited(engine.start());

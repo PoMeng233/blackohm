@@ -144,4 +144,59 @@ void main() {
       );
     });
   });
+
+  group('别名 exe', () {
+    final aliasAttr = GameAttributor();
+    aliasAttr.rebuild(
+      [
+        _game(
+          id: 100,
+          title: '宝石心',
+          exePath: r'g:\galgame\jewelry\jeweha.exe',
+          dirPath: r'g:\galgame\jewelry',
+        ),
+      ],
+      [
+        GameAlias(
+          id: 1,
+          gameId: 100,
+          exePath: r'g:\galgame\jewelry\patch\patch_chs.exe',
+          dirPath: r'g:\galgame\jewelry\patch',
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ],
+    );
+
+    test('别名路径精确命中并返回命中路径', () {
+      final match = aliasAttr.resolveMatch(
+        imagePath: r'g:\galgame\jewelry\patch\patch_chs.exe',
+        commandLine: null,
+        windowTitle: '',
+        visible: true,
+      );
+      expect(match, isNotNull);
+      expect(match!.gameId, 100);
+      expect(match.matchedExePath, r'g:\galgame\jewelry\patch\patch_chs.exe');
+      expect(match.matchedExeFileName, 'patch_chs.exe');
+    });
+
+    test('包装壳命令行匹配别名主名时收敛到同一张卡', () {
+      expect(
+        aliasAttr.resolve(
+          imagePath: r'c:\users\pomeng\appdata\local\temp\evbXYZ.tmp',
+          commandLine: 'patch_chs.exe',
+          windowTitle: '',
+          visible: true,
+        ),
+        100,
+      );
+    });
+
+    test('exeFileNamesFor 同时包含主程序与别名', () {
+      expect(aliasAttr.exeFileNamesFor(100), {
+        'jeweha.exe',
+        'patch_chs.exe',
+      });
+    });
+  });
 }

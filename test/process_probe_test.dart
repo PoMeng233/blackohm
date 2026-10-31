@@ -10,13 +10,13 @@ class _FakeProbe implements GameLivenessProbe {
   GameLiveness result;
   int calls = 0;
   int? lastPid;
-  String? lastName;
+  Set<String>? lastNames;
 
   @override
-  GameLiveness probe({required int pid, required String exeFileName}) {
+  GameLiveness probe({required int pid, required Set<String> exeFileNames}) {
     calls++;
     lastPid = pid;
-    lastName = exeFileName;
+    lastNames = exeFileNames;
     return result;
   }
 }
@@ -67,7 +67,7 @@ void main() {
         interval: const Duration(seconds: 3),
       );
       final start = DateTime(2026, 1, 1, 10);
-      watchdog.arm(pid: 42, exeFileName: 'game.exe', now: start);
+      watchdog.arm(pid: 42, exeFileNames: const {'game.exe'}, now: start);
 
       expect(
         watchdog.shouldCloseGame(now: start.add(const Duration(seconds: 2))),
@@ -83,7 +83,7 @@ void main() {
         interval: const Duration(seconds: 3),
       );
       final start = DateTime(2026, 1, 1, 10);
-      watchdog.arm(pid: 42, exeFileName: 'game.exe', now: start);
+      watchdog.arm(pid: 42, exeFileNames: const {'game.exe'}, now: start);
 
       expect(
         watchdog.shouldCloseGame(now: start.add(const Duration(seconds: 3))),
@@ -91,7 +91,7 @@ void main() {
       );
       expect(probe.calls, 1);
       expect(probe.lastPid, 42);
-      expect(probe.lastName, 'game.exe');
+      expect(probe.lastNames, const {'game.exe'});
     });
 
     test('到达间隔但游戏仍在运行时保持会话', () {
@@ -101,7 +101,7 @@ void main() {
         interval: const Duration(seconds: 3),
       );
       final start = DateTime(2026, 1, 1, 10);
-      watchdog.arm(pid: 42, exeFileName: 'game.exe', now: start);
+      watchdog.arm(pid: 42, exeFileNames: const {'game.exe'}, now: start);
 
       expect(
         watchdog.shouldCloseGame(now: start.add(const Duration(seconds: 3))),
@@ -123,7 +123,7 @@ void main() {
         interval: const Duration(seconds: 3),
       );
       final start = DateTime(2026, 1, 1, 10);
-      watchdog.arm(pid: 42, exeFileName: 'game.exe', now: start);
+      watchdog.arm(pid: 42, exeFileNames: const {'game.exe'}, now: start);
       watchdog.disarm();
 
       expect(
@@ -131,6 +131,22 @@ void main() {
         isFalse,
       );
       expect(probe.calls, 0);
+    });
+
+    test('探测时把全部被跟踪文件名一并传入', () {
+      final probe = _FakeProbe(GameLiveness.closed);
+      final watchdog = GraceWatchdog(probe: probe);
+      final start = DateTime(2026, 1, 1, 10);
+      watchdog.arm(
+        pid: 42,
+        exeFileNames: const {'jeweha.exe', 'patch_chs.exe'},
+        now: start,
+      );
+      expect(
+        watchdog.shouldCloseGame(now: start.add(const Duration(seconds: 3))),
+        isTrue,
+      );
+      expect(probe.lastNames, const {'jeweha.exe', 'patch_chs.exe'});
     });
   });
 
@@ -146,7 +162,7 @@ void main() {
       final current = Platform.resolvedExecutable
           .split(Platform.pathSeparator)
           .last;
-      final liveness = probe.probe(pid: pid, exeFileName: current);
+      final liveness = probe.probe(pid: pid, exeFileNames: {current});
       expect(liveness, isNot(GameLiveness.closed));
     });
   });

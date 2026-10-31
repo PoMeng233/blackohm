@@ -12,6 +12,23 @@ library;
 
 import '../../core/database/app_database.dart';
 
+/// 一次前台归因的命中结果。
+class GameMatch {
+  const GameMatch({required this.gameId, this.matchedExePath});
+
+  final int gameId;
+
+  /// 精确命中时为命中的 exe 路径；包装壳启发式命中时为 null。
+  final String? matchedExePath;
+
+  String? get matchedExeFileName {
+    final path = matchedExePath;
+    if (path == null) return null;
+    final name = path.replaceAll('\\', '/').split('/').last.toLowerCase();
+    return name.isEmpty ? null : name;
+  }
+}
+
 /// 归因用的轻量索引条目（纯数据，便于单元测试）。
 class GameMatchEntry {
   const GameMatchEntry({
@@ -35,38 +52,63 @@ class GameMatchEntry {
 
 class GameAttributor {
   final Map<String, int> _exeIndex = {};
-  final Map<int, String> _exeFileNameByGame = {};
+  final Map<int, Set<String>> _exeFileNamesByGame = {};
   final List<GameMatchEntry> _entries = [];
 
-  /// 该游戏 exe 的文件名（小写、含扩展名），用于判断游戏进程是否仍在运行。
-  String? exeFileNameFor(int gameId) => _exeFileNameByGame[gameId];
+  /// 该卡跟踪的全部 exe 文件名（小写、含扩展名），用于存活判定。
+  Set<String> exeFileNamesFor(int gameId) =>
+      Set<String>.unmodifiable(_exeFileNamesByGame[gameId] ?? const <String>{});
 
   /// 库变化时重建索引（与 TrackingEngine.rebuildIndex 同频）。
-  void rebuild(List<Game> games) {
+  void rebuild(List<Game> games, [List<GameAlias> aliases = const []]) {
+    final aliasesByGame = <int, List<GameAlias>>{};
+    for (final a in aliases) {
+      aliasesByGame.putIfAbsent(a.gameId, () => <GameAlias>[]).add(a);
+    }
+    final titleById = <int, String>{
+      for (final g in games) g.id: _normalizeText(g.title),
+    };
+
     _exeIndex
       ..clear()
-      ..addEntries(games.map((g) => MapEntry(g.exePath, g.id)));
-    _exeFileNameByGame
+      ..addEntries(games.map((g) => MapEntry(g.exePath, g.id)))
+      ..addEntries(aliases.map((a) => MapEntry(a.exePath, a.gameId)));
+
+    _exeFileNamesByGame
       ..clear()
       ..addEntries(
-        games.map((g) => MapEntry(g.id, _basename(g.exePath).toLowerCase())),
+        games.map((g) {
+          final names = <String>{_basename(g.exePath).toLowerCase()};
+          for (final a in aliasesByGame[g.id] ?? const <GameAlias>[]) {
+            names.add(_basename(a.exePath).toLowerCase());
+          }
+          return MapEntry(g.id, names);
+        }),
       );
+
     _entries
       ..clear()
-      ..addAll(
-        games.map((g) {
-          return GameMatchEntry(
+      ..addAll([
+        for (final g in games)
+          GameMatchEntry(
             gameId: g.id,
             exeStem: _exeStem(g.exePath),
             title: _normalizeText(g.title),
             dirStem: _normalizeText(_basename(g.dirPath)),
-          );
-        }),
-      );
+          ),
+        for (final a in aliases)
+          GameMatchEntry(
+            gameId: a.gameId,
+            exeStem: _exeStem(a.exePath),
+            title: titleById[a.gameId] ?? '',
+            dirStem: _normalizeText(_basename(a.dirPath)),
+          ),
+      ]);
   }
 
-  /// 把 watcher 上报的前台快照归因到一个 gameId；无法唯一确定时返回 null。
-  int? resolve({
+  /// 把 watcher 上报的前台快照归因到一个 gameId + 命中路径；
+  /// 无法唯一确定时返回 null。
+  GameMatch? resolveMatch({
     required String? imagePath,
     required String? commandLine,
     required String windowTitle,
@@ -75,9 +117,11 @@ class GameAttributor {
     final path = imagePath;
     if (!visible || path == null) return null;
 
-    // 1) 精确命中：游戏 exePath 与前台进程镜像路径一致（常规游戏）。
+    // 1) 精确命中：主 exe 或别名路径与前台镜像路径一致。
     final exact = _exeIndex[path];
-    if (exact != null) return exact;
+    if (exact != null) {
+      return GameMatch(gameId: exact, matchedExePath: path);
+    }
 
     // 2) 仅对“包装壳候选”（前台进程位于临时目录）做补充归因，
     //    避免把浏览器/文件管理器等普通前台窗口误判成游戏。
@@ -93,7 +137,7 @@ class GameAttributor {
         }
       }
     }
-    if (candidates.length == 1) return candidates.single;
+    if (candidates.length == 1) return GameMatch(gameId: candidates.single);
 
     // 3) 命令行无法唯一收敛时，用标题/目录名精确匹配兜底，并要求与命令行
     //    候选不冲突（若命令行已经有多个候选，唯一标题必须落在其中才能收敛）。
@@ -107,10 +151,26 @@ class GameAttributor {
       }
       if (titleIds.length == 1) {
         final id = titleIds.single;
-        if (candidates.isEmpty || candidates.contains(id)) return id;
+        if (candidates.isEmpty || candidates.contains(id)) {
+          return GameMatch(gameId: id);
+        }
       }
     }
     return null;
+  }
+
+  int? resolve({
+    required String? imagePath,
+    required String? commandLine,
+    required String windowTitle,
+    required bool visible,
+  }) {
+    return resolveMatch(
+      imagePath: imagePath,
+      commandLine: commandLine,
+      windowTitle: windowTitle,
+      visible: visible,
+    )?.gameId;
   }
 
   // ── 纯字符串工具 ─────────────────────────────────────────────

@@ -75,6 +75,9 @@ class _ActiveSession {
   int accumulatedMs = 0;
   int pid = 0; // 命中时的前台进程 PID，用于判断游戏是否已关闭
   DateTime? graceSince; // null = live
+
+  /// 精确命中的 exe 文件名；null = 包装壳启发式命中。
+  String? matchedExeFileName;
 }
 
 class TrackingEngine {
@@ -143,8 +146,8 @@ class TrackingEngine {
   }
 
   /// 游戏库变化时重建命中索引（拖拽入库 / 删除后自动生效，无需重启）。
-  void rebuildIndex(List<Game> games) {
-    _attributor.rebuild(games);
+  void rebuildIndex(List<Game> games, [List<GameAlias> aliases = const []]) {
+    _attributor.rebuild(games, aliases);
   }
 
   /// 启动引擎：spawn watcher isolate + 1s 精算 tick。
@@ -239,12 +242,13 @@ class TrackingEngine {
   }
 
   void _onSnapshot(ForegroundSnapshot s) {
-    final gameId = _attributor.resolve(
+    final match = _attributor.resolveMatch(
       imagePath: s.imagePath,
       commandLine: s.commandLine,
       windowTitle: s.windowTitle,
       visible: s.visible,
     );
+    final gameId = match?.gameId;
     _foregroundGameId = gameId;
     if (gameId == null) {
       final wasInputIdle = _inputIdleGameId != null;
@@ -263,6 +267,8 @@ class TrackingEngine {
     if (active != null && active.gameId == gameId) {
       active.graceSince = null; // 防抖窗口内回归：合并为连续 Session
       if (s.pid > 0) active.pid = s.pid;
+      active.matchedExeFileName =
+          match?.matchedExeFileName ?? active.matchedExeFileName;
       _watchdog.disarm(); // 已回到前台，无需再做存活判定
       _liveStartedAt = DateTime.now();
       _emit();
@@ -272,7 +278,11 @@ class TrackingEngine {
       unawaited(_commitActive()); // 换游戏：先结前一个（Drift 后台串行写入）
     }
     _inputIdleGameId = null;
-    _startSession(gameId, pid: s.pid);
+    _startSession(
+      gameId,
+      pid: s.pid,
+      matchedExeFileName: match?.matchedExeFileName,
+    );
   }
 
   void _enterGraceIfNeeded() {
@@ -282,17 +292,22 @@ class TrackingEngine {
     a.graceSince = now;
     // 进入暂停态后必须持续确认游戏是否仍在运行：
     // 挂后台未关 → 保持红框；已经关闭 → 立即结束会话。
-    _watchdog.arm(
-      pid: a.pid,
-      exeFileName: _attributor.exeFileNameFor(a.gameId) ?? '',
-      now: now,
-    );
+    final names = <String>{};
+    final matched = a.matchedExeFileName;
+    if (matched != null) {
+      names.add(matched);
+    } else {
+      names.addAll(_attributor.exeFileNamesFor(a.gameId));
+    }
+    _watchdog.arm(pid: a.pid, exeFileNames: names, now: now);
     _emit();
   }
 
-  void _startSession(int gameId, {int pid = 0}) {
+  void _startSession(int gameId, {int pid = 0, String? matchedExeFileName}) {
     _watchdog.disarm();
-    _active = _ActiveSession(gameId: gameId)..pid = pid;
+    _active = _ActiveSession(gameId: gameId)
+      ..pid = pid
+      ..matchedExeFileName = matchedExeFileName;
     _sessionStartedAt = DateTime.now();
     _liveStartedAt = _sessionStartedAt;
     _lastFlush = DateTime.now();
@@ -379,6 +394,11 @@ class TrackingEngine {
     }
     _inputIdleGameId = null;
     _startSession(gameId);
+  }
+
+  /// 合并卡片前结算当前会话，保证累计时长已落盘。
+  Future<void> settleActive() async {
+    await _commitActive();
   }
 
   /// 结束当前会话并落盘（含 totalPlaySeconds 增量）。
