@@ -62,6 +62,46 @@ class GameRepository {
     return q.getSingleOrNull();
   }
 
+  /// 全库已跟踪路径（主 exe ∪ 别名），供入库去重。
+  ///
+  /// 用 selectOnly 只读路径列，避免把 icon_png blob 读进内存。
+  Future<Set<String>> allTrackedExePaths() async {
+    final paths = <String>{};
+    final primaries = await (_db.selectOnly(
+      _db.games,
+    )..addColumns([_db.games.exePath])).get();
+    for (final row in primaries) {
+      final path = row.read(_db.games.exePath);
+      if (path != null) paths.add(path);
+    }
+    final aliases = await (_db.selectOnly(
+      _db.gameAliases,
+    )..addColumns([_db.gameAliases.exePath])).get();
+    for (final row in aliases) {
+      final path = row.read(_db.gameAliases.exePath);
+      if (path != null) paths.add(path);
+    }
+    return paths;
+  }
+
+  /// 该路径是否已被任意游戏或别名跟踪。
+  Future<bool> isExePathTracked(String normalizedExePath) async {
+    final primary =
+        await (_db.selectOnly(_db.games)
+              ..addColumns([_db.games.id])
+              ..where(_db.games.exePath.equals(normalizedExePath))
+              ..limit(1))
+            .getSingleOrNull();
+    if (primary != null) return true;
+    final alias =
+        await (_db.selectOnly(_db.gameAliases)
+              ..addColumns([_db.gameAliases.id])
+              ..where(_db.gameAliases.exePath.equals(normalizedExePath))
+              ..limit(1))
+            .getSingleOrNull();
+    return alias != null;
+  }
+
   Future<int> insert(GamesCompanion entry) =>
       _db.into(_db.games).insert(entry, mode: InsertMode.insertOrIgnore);
 

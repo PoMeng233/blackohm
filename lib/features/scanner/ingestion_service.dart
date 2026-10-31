@@ -126,11 +126,8 @@ class IngestionService {
     int? folderId,
   }) async {
     final report = IngestReport();
-    final existing = <String>{};
-    // 全库已入库路径（去重判定）。
-    for (final g in await _games.watchAll().first) {
-      existing.add(g.exePath);
-    }
+    // 全库已跟踪路径（主 exe ∪ 别名，去重判定）。
+    final existing = await _games.allTrackedExePaths();
 
     // 1) 扫描（独立 Isolate，含 stat）
     final groups = await Isolate.run(() {
@@ -243,7 +240,7 @@ class IngestionService {
       real = c.path;
     }
     final normalized = normalizeExePath(real);
-    if (await _games.findByExePath(normalized) != null) return null;
+    if (await _games.isExePathTracked(normalized)) return null;
     final dirPath = File(c.path).parent.path;
     final fallbackTitle = dirPath.split(Platform.pathSeparator).last;
     final title = _pickTitle(c, fallbackTitle);
@@ -270,10 +267,7 @@ class IngestionService {
     void Function(int done, int total)? onProgress,
   }) async {
     final report = LibraryImportReport()..truncated = layout.truncated;
-    final existing = <String>{};
-    for (final g in await _games.watchAll().first) {
-      existing.add(g.exePath);
-    }
+    final existing = await _games.allTrackedExePaths();
 
     final total = layout.games.length;
     var done = 0;

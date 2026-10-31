@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:blackohm/core/database/app_database.dart';
+import 'package:blackohm/core/path_normalizer.dart';
 import 'package:blackohm/data/game_repository.dart';
 import 'package:blackohm/features/scanner/ingestion_service.dart';
 import 'package:blackohm/features/scanner/library_scanner.dart';
@@ -122,6 +123,38 @@ void main() {
 
     expect(report.added, hasLength(10));
     expect(await repo.watchAll().first, hasLength(10));
+  });
+
+  test('别名路径再次入库时按重复跳过', () async {
+    await _write(root, 'GameB/GameB.exe');
+    final aliasPath = normalizeExePath(
+      '${root.path}${Platform.pathSeparator}GameB${Platform.pathSeparator}GameB.exe',
+    );
+    final existingId = await db
+        .into(db.games)
+        .insert(
+          GamesCompanion.insert(
+            title: '已存在',
+            exePath: r'g:\other\other.exe',
+            dirPath: r'g:\other',
+          ),
+        );
+    await db
+        .into(db.gameAliases)
+        .insert(
+          GameAliasesCompanion.insert(
+            gameId: existingId,
+            exePath: aliasPath,
+            dirPath: '${root.path}${Platform.pathSeparator}GameB',
+          ),
+        );
+
+    final report = await service.ingestDroppedPaths([
+      '${root.path}${Platform.pathSeparator}GameB',
+    ]);
+
+    expect(report.duplicatePaths, isNotEmpty);
+    expect(await repo.watchAll().first, hasLength(1));
   });
 }
 
