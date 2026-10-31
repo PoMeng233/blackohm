@@ -27,6 +27,8 @@ class GameCard extends ConsumerStatefulWidget {
     required this.onToggleFavorite,
     this.onResize,
     this.tileSize = MetroTileSize.small,
+    this.decodeWidth,
+    this.decodeHeight,
     super.key,
   });
 
@@ -40,6 +42,14 @@ class GameCard extends ConsumerStatefulWidget {
   /// 提交手动尺寸；传 null 表示恢复自动尺寸。
   final ValueChanged<MetroTileSize?>? onResize;
   final MetroTileSize tileSize;
+
+  /// 封面解码目标尺寸（逻辑像素），由磁贴墙传入最终布局尺寸。
+  ///
+  /// 重排动画期间磁贴宽高逐帧变化，若跟着实时约束解码，每一帧都会产生
+  /// 新的 ResizeImage 缓存键：封面被反复取消、重解码、重播淡入，看起来
+  /// 就是闪烁和卡顿。传 null 时退回实时约束（独立使用卡片的场景）。
+  final double? decodeWidth;
+  final double? decodeHeight;
 
   @override
   ConsumerState<GameCard> createState() => _GameCardState();
@@ -223,12 +233,15 @@ class _GameCardState extends ConsumerState<GameCard> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 解码尺寸跟随磁贴实际物理像素，避免为大图常驻过量位图缓存。
-        final cacheWidth = constraints.maxWidth.isFinite
-            ? (constraints.maxWidth * dpr).round().clamp(1, 1024)
+        // 解码尺寸跟随磁贴最终物理像素，避免为大图常驻过量位图缓存；
+        // 有稳定的目标尺寸时不要读动画中的实时约束。
+        final decodeW = widget.decodeWidth ?? constraints.maxWidth;
+        final decodeH = widget.decodeHeight ?? constraints.maxHeight;
+        final cacheWidth = decodeW.isFinite
+            ? (decodeW * dpr).round().clamp(1, 1024)
             : 360;
-        final cacheHeight = constraints.maxHeight.isFinite
-            ? (constraints.maxHeight * dpr).round().clamp(1, 1024)
+        final cacheHeight = decodeH.isFinite
+            ? (decodeH * dpr).round().clamp(1, 1024)
             : 360;
         final resizeTarget = _resizeTarget;
         final resizeStart = _resizeStart;

@@ -1050,6 +1050,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                 child: GameCard(
                                   game: game,
                                   tileSize: size,
+                                  decodeWidth: metrics.widthFor(size),
+                                  decodeHeight: metrics.heightFor(size),
                                   onOpenDetail: () => showDialog<void>(
                                     context: context,
                                     builder: (_) =>
