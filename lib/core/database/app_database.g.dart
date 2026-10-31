@@ -2174,7 +2174,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
 }
 
 class $GameAliasesTable extends GameAliases
-    with TableInfo<$GameAliasesTable, GameAliase> {
+    with TableInfo<$GameAliasesTable, GameAlias> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -2264,7 +2264,7 @@ class $GameAliasesTable extends GameAliases
   static const String $name = 'game_aliases';
   @override
   VerificationContext validateIntegrity(
-    Insertable<GameAliase> instance, {
+    Insertable<GameAlias> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -2314,9 +2314,9 @@ class $GameAliasesTable extends GameAliases
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  GameAliase map(Map<String, dynamic> data, {String? tablePrefix}) {
+  GameAlias map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return GameAliase(
+    return GameAlias(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
@@ -2350,7 +2350,7 @@ class $GameAliasesTable extends GameAliases
   }
 }
 
-class GameAliase extends DataClass implements Insertable<GameAliase> {
+class GameAlias extends DataClass implements Insertable<GameAlias> {
   final int id;
 
   /// 所属游戏（级联删除）。
@@ -2365,7 +2365,7 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
   /// 来源标签（合并时写入源卡标题，手动添加时可为空）。
   final String? label;
   final DateTime createdAt;
-  const GameAliase({
+  const GameAlias({
     required this.id,
     required this.gameId,
     required this.exePath,
@@ -2400,12 +2400,12 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
     );
   }
 
-  factory GameAliase.fromJson(
+  factory GameAlias.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return GameAliase(
+    return GameAlias(
       id: serializer.fromJson<int>(json['id']),
       gameId: serializer.fromJson<int>(json['gameId']),
       exePath: serializer.fromJson<String>(json['exePath']),
@@ -2427,14 +2427,14 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
     };
   }
 
-  GameAliase copyWith({
+  GameAlias copyWith({
     int? id,
     int? gameId,
     String? exePath,
     String? dirPath,
     Value<String?> label = const Value.absent(),
     DateTime? createdAt,
-  }) => GameAliase(
+  }) => GameAlias(
     id: id ?? this.id,
     gameId: gameId ?? this.gameId,
     exePath: exePath ?? this.exePath,
@@ -2442,8 +2442,8 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
     label: label.present ? label.value : this.label,
     createdAt: createdAt ?? this.createdAt,
   );
-  GameAliase copyWithCompanion(GameAliasesCompanion data) {
-    return GameAliase(
+  GameAlias copyWithCompanion(GameAliasesCompanion data) {
+    return GameAlias(
       id: data.id.present ? data.id.value : this.id,
       gameId: data.gameId.present ? data.gameId.value : this.gameId,
       exePath: data.exePath.present ? data.exePath.value : this.exePath,
@@ -2455,7 +2455,7 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
 
   @override
   String toString() {
-    return (StringBuffer('GameAliase(')
+    return (StringBuffer('GameAlias(')
           ..write('id: $id, ')
           ..write('gameId: $gameId, ')
           ..write('exePath: $exePath, ')
@@ -2472,7 +2472,7 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is GameAliase &&
+      (other is GameAlias &&
           other.id == this.id &&
           other.gameId == this.gameId &&
           other.exePath == this.exePath &&
@@ -2481,7 +2481,7 @@ class GameAliase extends DataClass implements Insertable<GameAliase> {
           other.createdAt == this.createdAt);
 }
 
-class GameAliasesCompanion extends UpdateCompanion<GameAliase> {
+class GameAliasesCompanion extends UpdateCompanion<GameAlias> {
   final Value<int> id;
   final Value<int> gameId;
   final Value<String> exePath;
@@ -2506,7 +2506,7 @@ class GameAliasesCompanion extends UpdateCompanion<GameAliase> {
   }) : gameId = Value(gameId),
        exePath = Value(exePath),
        dirPath = Value(dirPath);
-  static Insertable<GameAliase> custom({
+  static Insertable<GameAlias> custom({
     Expression<int>? id,
     Expression<int>? gameId,
     Expression<String>? exePath,
@@ -3003,7 +3003,7 @@ final class $$GamesTableReferences
     );
   }
 
-  static MultiTypedResultKey<$GameAliasesTable, List<GameAliase>>
+  static MultiTypedResultKey<$GameAliasesTable, List<GameAlias>>
   _gameAliasesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.gameAliases,
     aliasName: 'games__id__game_aliases__game_id',
@@ -3683,7 +3683,7 @@ class $$GamesTableTableManager
                         await $_getPrefetchedDataByColumns<
                           Game,
                           $GamesTable,
-                          GameAliase,
+                          GameAlias,
                           $GameAliasesTable
                         >(
                           currentTable: table,
@@ -4206,7 +4206,7 @@ typedef $$GameAliasesTableUpdateCompanionBuilder =
     });
 
 final class $$GameAliasesTableReferences
-    extends BaseReferences<_$AppDatabase, $GameAliasesTable, GameAliase> {
+    extends BaseReferences<_$AppDatabase, $GameAliasesTable, GameAlias> {
   $$GameAliasesTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $GamesTable _gameIdTable(_$AppDatabase db) =>
@@ -4396,14 +4396,14 @@ class $$GameAliasesTableTableManager
         RootTableManager<
           _$AppDatabase,
           $GameAliasesTable,
-          GameAliase,
+          GameAlias,
           $$GameAliasesTableFilterComposer,
           $$GameAliasesTableOrderingComposer,
           $$GameAliasesTableAnnotationComposer,
           $$GameAliasesTableCreateCompanionBuilder,
           $$GameAliasesTableUpdateCompanionBuilder,
-          (GameAliase, $$GameAliasesTableReferences),
-          GameAliase,
+          (GameAlias, $$GameAliasesTableReferences),
+          GameAlias,
           PrefetchHooks Function({bool gameId})
         > {
   $$GameAliasesTableTableManager(_$AppDatabase db, $GameAliasesTable table)
@@ -4452,7 +4452,7 @@ class $$GameAliasesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable<$GameAliasesTable, GameAliase>(table),
+                  e.readTable<$GameAliasesTable, GameAlias>(table),
                   $$GameAliasesTableReferences(db, table, e),
                 ),
               )
@@ -4506,14 +4506,14 @@ typedef $$GameAliasesTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
       $GameAliasesTable,
-      GameAliase,
+      GameAlias,
       $$GameAliasesTableFilterComposer,
       $$GameAliasesTableOrderingComposer,
       $$GameAliasesTableAnnotationComposer,
       $$GameAliasesTableCreateCompanionBuilder,
       $$GameAliasesTableUpdateCompanionBuilder,
-      (GameAliase, $$GameAliasesTableReferences),
-      GameAliase,
+      (GameAlias, $$GameAliasesTableReferences),
+      GameAlias,
       PrefetchHooks Function({bool gameId})
     >;
 

@@ -86,6 +86,7 @@ class Games extends Table {
 ///
 /// 场景：汉化补丁、启动器、包装壳会启动原版 exe，一张卡需要跟踪多个路径。
 /// 主 exe 仍存于 [Games.exePath]，本表只存附加路径。
+@DataClassName('GameAlias')
 class GameAliases extends Table {
   IntColumn get id => integer().autoIncrement()();
 
