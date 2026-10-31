@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app_constants.dart';
 import 'core/database/app_database.dart';
+import 'data/alias_repository.dart';
 import 'data/folder_repository.dart';
 import 'data/game_repository.dart';
 import 'data/session_repository.dart';
@@ -31,6 +32,10 @@ final gameRepoProvider = Provider<GameRepository>(
   (ref) => GameRepository(ref.watch(databaseProvider)),
 );
 
+final aliasRepoProvider = Provider<AliasRepository>(
+  (ref) => AliasRepository(ref.watch(databaseProvider)),
+);
+
 final sessionRepoProvider = Provider<SessionRepository>(
   (ref) => SessionRepository(ref.watch(databaseProvider)),
 );
@@ -46,6 +51,10 @@ final folderRepoProvider = Provider<FolderRepository>(
 // ── 游戏库视图 ────────────────────────────────────────────────
 final gameListProvider = StreamProvider<List<Game>>(
   (ref) => ref.watch(gameRepoProvider).watchAll(),
+);
+
+final aliasListProvider = StreamProvider<List<GameAlias>>(
+  (ref) => ref.watch(aliasRepoProvider).watchAll(),
 );
 
 final folderListProvider = StreamProvider<List<GameFolder>>(
