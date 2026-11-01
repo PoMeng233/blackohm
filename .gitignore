@@ -45,12 +45,14 @@ app.*.map.json
 /android/app/release
 
 # ── BlackOhm 项目专属 ────────────────────────────────────────
+.zcode/
+.zcodeignore
 # OpenCode 本地计划/工作区文件
 .opencode/
 # Mimosa 本地工作目录
 .mimosa/
-# 图标多尺寸对照图（python tool/generate_icons.py --preview 可随时重新生成）
-docs/icon-preview.png
+# 文档（包含ai废话）
+docs/
 # Python 缓存
 __pycache__/
 # Drift 生成绑定文件会提交到版本控制，确保克隆后可直接构建。
