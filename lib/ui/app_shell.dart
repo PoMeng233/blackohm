@@ -25,6 +25,18 @@ import 'widgets/library_import_dialog.dart';
 import 'widgets/cover_file_image.dart';
 import 'widgets/window_resize_frame.dart';
 
+/// 窗口事件 → 主窗口可见性；null 表示该事件与可见性无关。
+///
+/// 不能只依赖 `onWindowRestore`：最大化窗口从最小化恢复时 Windows 发出的是
+/// `WM_SIZE SIZE_MAXIMIZED`，window_manager 只会派发 `maximize` 而永不派发
+/// `restore`，可见性会永久停在 false——引擎每秒的状态推送被静默丢弃，
+/// 计时仍在累加，界面却冻结在暂停态。
+bool? windowVisibilityForEvent(String eventName) => switch (eventName) {
+  'show' || 'restore' || 'maximize' || 'unmaximize' || 'focus' => true,
+  'hide' || 'minimize' => false,
+  _ => null,
+};
+
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -183,16 +195,16 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   void onWindowLeaveFullScreen() => setState(() => _windowFullscreen = false);
 
   @override
+  void onWindowEvent(String eventName) {
+    final visible = windowVisibilityForEvent(eventName);
+    if (visible != null) _setWindowVisibility(visible);
+  }
+
+  @override
   void onWindowFocus() => ref.read(memoryTrimProvider).setFocused(true);
 
   @override
   void onWindowBlur() => ref.read(memoryTrimProvider).setFocused(false);
-
-  @override
-  void onWindowMinimize() => _setWindowVisibility(false);
-
-  @override
-  void onWindowRestore() => _setWindowVisibility(true);
 
   @override
   void onWindowClose() async {
