@@ -5,7 +5,7 @@
 BlackOhm 面向视觉小说和独立游戏库管理场景：将游戏目录或 `.exe` 拖入窗口即可扫描入库（目前尚未实现多游戏入库）；当一个已入库游戏的主窗口真正位于前台、可见且未最小化时，才累计游玩时长。它不依赖由本程序启动的子进程句柄，因此经 Locale Emulator、外部启动器或直接双击运行的游戏都可被被动捕获。
 
 <p align="center">
-  <img src="docs/icon-showcase.png" alt="BlackOhm 图标" width="132">
+  <img src="assets/icon-showcase.png" alt="BlackOhm 图标" width="132">
 </p>
 
 ## 界面展示
@@ -152,10 +152,10 @@ assets/
 ├── fonts/MiSans-Regular.otf                # 内置 MiSans 全局 UI 字体
 ├── icon.svg                                # 图标矢量源（透明小屋标记，唯一来源）
 ├── icon_source.png                         # 由 icon.svg 生成的界面图标
+├── icon-showcase.svg                       # 圆角磨砂玻璃底座版图标（仅 README 展示）
+├── icon-showcase.png                       # 由 icon-showcase.svg 生成的展示图
 └── tray.ico                                # 由 icon.svg 生成的多尺寸托盘图标
 
-docs/ARCHITECTURE.md                      # 数据流、性能和约束说明
-docs/icon-showcase.svg                    # 圆角磨砂玻璃底座版图标（仅 README 展示）
 tool/generate_icons.py                    # 由 icon.svg 生成图标资源与展示图
 ```
 ## 已知限制
@@ -211,8 +211,8 @@ python tool/generate_icons.py
 
 脚本按每档目标尺寸原生渲染，生成 `assets/icon_source.png`、`assets/tray.ico` 与
 `windows/runner/resources/app_icon.ico`；加 `--preview` 可额外输出多尺寸对照图。
-README 顶部的展示图由 `docs/icon-showcase.svg`（圆角磨砂玻璃底座版，不参与打包）
-渲染为 `docs/icon-showcase.png`。
+README 顶部的展示图由 `assets/icon-showcase.svg`（圆角磨砂玻璃底座版，不参与打包）
+渲染为 `assets/icon-showcase.png`。
 
 ## License
 

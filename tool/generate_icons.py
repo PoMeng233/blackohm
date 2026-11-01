@@ -4,7 +4,7 @@
 
 * assets/icon.svg          —— 透明背景的小屋标记，**实际图标唯一来源**：
                               UI 展示图、windows/runner/resources/app_icon.ico、assets/tray.ico
-* docs/icon-showcase.svg   —— 圆角磨砂玻璃底座版，仅用于 README 展示，不参与打包
+* assets/icon-showcase.svg —— 圆角磨砂玻璃底座版，仅用于 README 展示，不参与打包
 
 替换旧脚本 tool/generate_app_icons.py：旧实现把 139x137 的位图源 `thumbnail`
 后居中塞进 256 画布（thumbnail 不会放大），导致 ICO 内容只占画布约一半，
@@ -31,13 +31,13 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 MARK_SVG = ROOT / "assets" / "icon.svg"
-SHOWCASE_SVG = ROOT / "docs" / "icon-showcase.svg"
+SHOWCASE_SVG = ROOT / "assets" / "icon-showcase.svg"
 
 # UI 里 Image.asset 引用的路径保持 icon_source.png，避免为改名去动 UI 代码。
 UI_PNG = ROOT / "assets" / "icon_source.png"
 TRAY_ICO = ROOT / "assets" / "tray.ico"
 APP_ICO = ROOT / "windows" / "runner" / "resources" / "app_icon.ico"
-SHOWCASE_PNG = ROOT / "docs" / "icon-showcase.png"
+SHOWCASE_PNG = ROOT / "assets" / "icon-showcase.png"
 PREVIEW_PNG = ROOT / "docs" / "icon-preview.png"
 
 # 托盘 16px 起就要清晰；exe 图标额外包含 128/256 供任务栏与开始菜单大图使用。
