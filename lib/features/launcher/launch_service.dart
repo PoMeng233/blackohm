@@ -13,17 +13,21 @@ library;
 import 'dart:io';
 
 import '../../core/database/app_database.dart';
+import '../../core/path_normalizer.dart';
 import '../../data/game_repository.dart';
 import '../../providers.dart' show AppSettingsState;
 
 class LaunchService {
   /// 直启游戏进程（detached：不持有管道，进程独立生存）。
+  ///
+  /// exe 与工作目录都先还原磁盘真实大小写：入库时 exe 路径被小写化，
+  /// 大小写不一致会让按字符串比较路径的汉化补丁失效。
   Future<bool> launchDirect(Game game) async {
     try {
       await Process.start(
-        game.exePath,
+        canonicalPath(game.exePath),
         _splitArgs(game.launchArgs),
-        workingDirectory: game.dirPath,
+        workingDirectory: canonicalPath(game.dirPath),
         mode: ProcessStartMode.detached,
       );
       return true;
@@ -39,7 +43,7 @@ class LaunchService {
     try {
       final tokens = _expandTemplate(
         s.leArgsTemplate,
-        exe: game.exePath,
+        exe: canonicalPath(game.exePath),
         profile: s.leProfile,
         extraArgs: game.launchArgs,
       );
@@ -75,8 +79,10 @@ class LaunchService {
     if (!directory.existsSync()) return false;
     try {
       final executable = File(game.exePath);
+      // /select 与路径必须分成两个 token：合并成一个 token 时 Dart 会因路径
+      // 含空格而整体加引号，explorer 解析失败并打开默认「文档」。
       final arguments = executable.existsSync()
-          ? <String>['/select,${game.exePath}']
+          ? <String>['/select,', game.exePath]
           : <String>[game.dirPath];
       await Process.start(
         'explorer.exe',

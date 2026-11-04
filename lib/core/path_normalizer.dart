@@ -9,6 +9,8 @@
 ///  * 全部小写化（Windows 内核路径不区分大小写）
 library;
 
+import 'dart:io';
+
 String normalizeExePath(String path) {
   var p = path.trim();
   if (p.startsWith(r'\\?\UNC\')) {
@@ -31,4 +33,21 @@ String displayPath(String path) {
   var p = path;
   if (p.startsWith(r'\\?\')) p = p.substring(4);
   return p;
+}
+
+/// 启动用真实路径：取回磁盘上的真实大小写。
+///
+/// Windows 路径本身不区分大小写，但部分汉化补丁（如 Longinus）在
+/// `CreateFileA` 钩子里按字符串比较路径。入库时 exe 路径经
+/// [normalizeExePath] 小写化，工作目录却保留原始大小写；两者不一致
+/// 会让补丁的归档重定向失效——表现为界面中文、正文回落原文。
+String canonicalPath(String path) {
+  try {
+    final resolved = FileSystemEntity.isDirectorySync(path)
+        ? Directory(path).resolveSymbolicLinksSync()
+        : File(path).resolveSymbolicLinksSync();
+    return displayPath(resolved);
+  } catch (_) {
+    return path;
+  }
 }
